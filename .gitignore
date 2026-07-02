@@ -1,0 +1,19 @@
+# Local Netlify folder
+.netlify
+
+# Dependências (reinstaláveis via package.json)
+node_modules/
+
+# Lixo de sistema
+desktop.ini
+Thumbs.db
+.DS_Store
+.claude/scheduled_tasks.lock
+
+# Catálogos PDF originais — muito grandes p/ o GitHub (alguns >100MB).
+# O catálogo já foi extraído e versionado em portal-b2b/ (imagens + JSON).
+*.pdf
+
+# Credenciais reais de login (senhas em texto puro) — NUNCA versionar.
+PORTAL - Credenciais Lojistas.csv
+PORTAL - Credenciais Representantes.csv

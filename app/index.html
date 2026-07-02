@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Colcci On The Move – KE</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ── NAV ──────────────────────────────────────────────── -->
+<nav class="nav">
+  <div class="nav-brand">
+    <span class="logo">colcci</span>
+    <span class="collection">ON THE MOVE · Verão '27</span>
+  </div>
+  <div class="nav-actions">
+    <a href="portal.html" class="btn btn-outline btn-sm">🎯 Portal B2B</a>
+    <a href="admin.html" class="btn btn-outline btn-sm">⚙ Admin</a>
+    <button class="cart-btn" id="cart-btn" title="Ver pedido">
+      🛍️
+      <span class="cart-badge" id="cart-badge" style="display:none">0</span>
+    </button>
+  </div>
+</nav>
+
+<!-- ── HERO ─────────────────────────────────────────────── -->
+<section class="hero">
+  <h1>On The Move</h1>
+  <p>Bolsas &amp; Acessórios Colcci · Monte seu pedido</p>
+</section>
+
+<!-- ── SEÇÕES: Disponível / Coleção ──────────────────────── -->
+<div class="section-toggle" id="section-toggle"></div>
+
+<!-- ── SEARCH ────────────────────────────────────────────── -->
+<div class="search-bar">
+  <input type="search" id="search-input" placeholder="Buscar por nome ou código...">
+</div>
+
+<!-- ── FILTERS ───────────────────────────────────────────── -->
+<div class="filters" id="filters"></div>
+
+<!-- ── PRODUCT GRID ──────────────────────────────────────── -->
+<div class="grid-container" id="product-grid"></div>
+
+<!-- ── OVERLAY ───────────────────────────────────────────── -->
+<div class="overlay" id="overlay"></div>
+
+<!-- ── CART DRAWER ───────────────────────────────────────── -->
+<aside class="cart-drawer" id="cart-drawer">
+  <div class="drawer-header">
+    <h2>🛍️ Meu Pedido</h2>
+    <button class="drawer-close" id="cart-close">×</button>
+  </div>
+  <div class="cart-items" id="cart-items">
+    <div class="cart-empty">
+      <div class="icon">🛍️</div>
+      <p>Seu pedido está vazio.</p>
+    </div>
+  </div>
+  <div class="cart-footer">
+    <div class="smart-panel" id="smart-panel"></div>
+    <div class="cart-total">
+      <span class="cart-total-label">Total atacado</span>
+      <span class="cart-total-val" id="cart-total-val">R$ 0,00</span>
+    </div>
+    <div class="min-order-note" id="min-order-note"></div>
+    <button class="btn btn-gold btn-full" id="checkout-btn" disabled>
+      Finalizar Pedido →
+    </button>
+  </div>
+</aside>
+
+<!-- ── ADD TO CART MODAL ──────────────────────────────────── -->
+<div class="modal-backdrop" id="add-modal"></div>
+
+<!-- ── ORDER FORM MODAL ───────────────────────────────────── -->
+<div class="modal-backdrop" id="order-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>📋 Finalizar Pedido</h2>
+      <button class="drawer-close" id="order-close">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:.85rem;color:#777;margin-bottom:20px">
+        Preencha os dados para enviarmos o pedido via WhatsApp.
+      </p>
+      <div class="form-group">
+        <label>Razão Social *</label>
+        <input type="text" id="o-razao" placeholder="Nome da empresa conforme CNPJ">
+      </div>
+      <div class="form-group">
+        <label>CNPJ *</label>
+        <input type="text" id="o-cnpj" placeholder="00.000.000/0000-00" maxlength="18">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nome do Comprador *</label>
+          <input type="text" id="o-name" placeholder="Seu nome completo">
+        </div>
+        <div class="form-group">
+          <label>WhatsApp *</label>
+          <input type="tel" id="o-phone" placeholder="(41) 99999-9999">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Observações</label>
+        <textarea id="o-notes" rows="3" placeholder="Prazo de entrega, endereço, forma de pagamento..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="order-cancel">Cancelar</button>
+      <button class="btn btn-gold" id="order-submit">
+        📱 Enviar pelo WhatsApp
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── TOAST ──────────────────────────────────────────────── -->
+<div class="toast-container" id="toast-container"></div>
+
+<script src="js/api.js"></script>
+<script src="js/seed-products.js"></script>
+<script src="js/data.js"></script>
+<script src="js/catalog.js"></script>
+</body>
+</html>

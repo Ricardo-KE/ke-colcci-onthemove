@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KE Admin · Colcci On The Move</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+
+<!-- ── LOGIN ─────────────────────────────────────────────── -->
+<div id="login-screen" class="login-screen">
+  <div class="login-card">
+    <div class="logo">KE</div>
+    <h2>Painel Administrativo</h2>
+    <h3>Colcci On The Move</h3>
+    <form id="login-form">
+      <div class="form-group">
+        <label>Senha</label>
+        <input type="password" id="admin-password" placeholder="Digite a senha" autocomplete="current-password">
+      </div>
+      <div class="login-error" id="login-error"></div>
+      <button type="submit" class="btn btn-gold btn-full" style="margin-top:8px">Entrar</button>
+    </form>
+    <p style="margin-top:16px;font-size:.78rem;color:#aaa">Senha padrão: <code>ke2027</code></p>
+  </div>
+</div>
+
+<!-- ── ADMIN PANEL ────────────────────────────────────────── -->
+<div id="admin-panel" class="admin-panel">
+  <nav class="admin-nav">
+    <div>
+      <span class="logo">KE</span>
+      <span>Admin · Colcci On The Move</span>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <a href="portal.html" class="btn btn-outline btn-sm" target="_blank">🎯 Portal B2B</a>
+      <a href="index.html" class="btn btn-outline btn-sm" target="_blank">👁 Ver Catálogo</a>
+      <button class="btn btn-ghost btn-sm" onclick="logout()">Sair</button>
+    </div>
+  </nav>
+
+  <div class="tabs-bar">
+    <button class="tab-btn" data-tab="products"  onclick="switchTab('products')">📦 Produtos</button>
+    <button class="tab-btn" data-tab="inventory" onclick="switchTab('inventory')">📊 Estoque</button>
+    <button class="tab-btn" data-tab="orders"    onclick="switchTab('orders')">🛍️ Pedidos</button>
+    <button class="tab-btn" data-tab="settings"  onclick="switchTab('settings')">⚙️ Configurações</button>
+  </div>
+
+  <div class="tab-content">
+
+    <!-- ── PRODUCTS ────────────────────────────────────────── -->
+    <div class="tab-pane" id="tab-products">
+      <div class="tab-section-header">
+        <h2>Produtos</h2>
+        <button class="btn btn-gold" onclick="openNew()">+ Novo Produto</button>
+      </div>
+      <div class="admin-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Código</th><th>Nome</th><th>Categoria</th>
+              <th>Preço</th><th>Estoque</th><th>Cores</th><th>Ativo</th><th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="products-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── INVENTORY ───────────────────────────────────────── -->
+    <div class="tab-pane" id="tab-inventory">
+      <div class="tab-section-header">
+        <h2>Controle de Estoque</h2>
+        <span style="font-size:.82rem;color:#aaa">Clique nos botões ou edite o número diretamente.</span>
+      </div>
+      <div id="inventory-list"></div>
+    </div>
+
+    <!-- ── ORDERS ──────────────────────────────────────────── -->
+    <div class="tab-pane" id="tab-orders">
+      <div class="tab-section-header">
+        <h2>Pedidos Recebidos</h2>
+        <button class="btn btn-outline btn-sm" onclick="renderOrders()">↻ Atualizar</button>
+      </div>
+      <div id="orders-list"></div>
+    </div>
+
+    <!-- ── SETTINGS ────────────────────────────────────────── -->
+    <div class="tab-pane" id="tab-settings">
+      <div class="tab-section-header"><h2>Configurações</h2></div>
+      <div class="settings-card">
+        <h3>WhatsApp & Contato</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Número WhatsApp (com DDI)</label>
+            <input type="text" id="s-whatsapp" placeholder="5511999999999">
+          </div>
+          <div class="form-group">
+            <label>E-mail de pedidos</label>
+            <input type="email" id="s-email" placeholder="pedidos@ke.com.br">
+          </div>
+        </div>
+        <h3 style="margin-top:20px">Coleção</h3>
+        <div class="form-group">
+          <label>Nome da Coleção</label>
+          <input type="text" id="s-collection" placeholder="On The Move">
+        </div>
+        <div class="form-group">
+          <label>Pedido mínimo (R$)</label>
+          <input type="number" id="s-min-order" min="0" step="10" placeholder="0">
+        </div>
+        <h3 style="margin-top:20px">Acesso · KE LTDA (Usuário Máximo)</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label>E-mail de acesso</label>
+            <input type="email" id="s-admin-email" placeholder="contato@ke.com.br">
+          </div>
+          <div class="form-group">
+            <label>Nova Senha</label>
+            <input type="password" id="s-pass" placeholder="Deixe em branco para manter">
+          </div>
+        </div>
+        <button class="btn btn-gold" onclick="saveSettings_()">💾 Salvar Configurações</button>
+      </div>
+    </div>
+
+  </div><!-- /tab-content -->
+</div><!-- /admin-panel -->
+
+<!-- ── PRODUCT FORM MODAL ─────────────────────────────────── -->
+<div class="modal-backdrop" id="product-modal">
+  <div class="modal" style="max-width:580px">
+    <div class="modal-header">
+      <h2 id="product-form-title">Novo Produto</h2>
+      <button class="drawer-close" onclick="closeProductModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Código *</label>
+          <input type="text" id="f-code" placeholder="BOL001">
+        </div>
+        <div class="form-group">
+          <label>Categoria</label>
+          <input type="text" id="f-category" placeholder="Praia, Casual, Festas...">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Nome do Produto *</label>
+        <input type="text" id="f-name" placeholder="Bolsa Palha Praia">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Preço (R$) *</label>
+          <input type="number" id="f-price" min="0" step="0.01" placeholder="89.90">
+        </div>
+        <div class="form-group">
+          <label>Estoque inicial</label>
+          <input type="number" id="f-stock" min="0" value="0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Cores disponíveis (separadas por vírgula)</label>
+        <input type="text" id="f-colors" placeholder="Natural, Bege, Preto">
+      </div>
+      <div class="form-group">
+        <label>Descrição</label>
+        <textarea id="f-description" rows="2" placeholder="Descrição breve do produto..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>Foto do Produto</label>
+        <div class="product-img-upload" onclick="document.getElementById('f-img-file').click()">
+          <img id="f-img-preview" src="" alt="Preview">
+          <p style="font-size:.82rem;color:#aaa">Clique para escolher uma imagem</p>
+          <input type="file" id="f-img-file" accept="image/*" style="display:none" onchange="handleImageUpload(this)">
+        </div>
+      </div>
+      <div class="form-group" style="display:flex;align-items:center;gap:10px">
+        <input type="checkbox" id="f-active" checked style="width:auto">
+        <label for="f-active" style="margin:0;text-transform:none;font-size:.9rem">Produto ativo no catálogo</label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeProductModal()">Cancelar</button>
+      <button class="btn btn-gold" onclick="saveProductForm()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── TOAST ──────────────────────────────────────────────── -->
+<div class="toast-container" id="admin-toast"></div>
+
+<script src="js/api.js"></script>
+<script src="js/seed-products.js"></script>
+<script src="js/data.js"></script>
+<script src="js/admin.js"></script>
+</body>
+</html>

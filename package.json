@@ -1,0 +1,9 @@
+{
+  "name": "ke-colcci-onthemove",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Portal B2B Colcci On The Move (catálogo + metas)",
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  }
+}
