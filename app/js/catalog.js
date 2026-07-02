@@ -481,6 +481,11 @@ async function submitOrder() {
     if (p) updateProduct(p.id, { stock: Math.max(0, p.stock - i.qty) });
   });
 
+  if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = 'Gerando PDF...'; }
+  try { await gerarPdfPedido(order, rep); }
+  catch (e) { console.warn('Falha ao gerar PDF do pedido:', e); toast('Pedido enviado, mas houve um erro ao gerar o PDF.', 'info'); }
+  if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.innerHTML = btnLabelOriginal; }
+
   sendWhatsApp(order, rep.whatsapp);
 
   cart = [];
@@ -489,7 +494,7 @@ async function submitOrder() {
   renderCart();
   renderProducts();
   closeOrderModal();
-  toast(rep.whatsapp ? `Pedido enviado para ${rep.nome}! 🎉` : 'Pedido enviado com sucesso! 🎉', 'success');
+  toast(rep.whatsapp ? `PDF baixado! Pedido enviado para ${rep.nome} 🎉` : 'PDF baixado! Pedido enviado 🎉', 'success');
 }
 
 function sendWhatsApp(order, repWhatsapp) {
@@ -512,12 +517,115 @@ function sendWhatsApp(order, repWhatsapp) {
     ``,
     `📅 ${fmtDate(order.date)}`,
     `🆔 Pedido #${order.id.slice(-6).toUpperCase()}`,
+    ``,
+    `📄 O PDF deste pedido (com foto de cada peça) acabou de ser baixado no seu aparelho — é só anexar aqui nesta conversa antes de enviar.`,
   ].filter(l => l !== null);
 
   const msg = encodeURIComponent(lines.join('\n'));
   const numero = onlyDigits(repWhatsapp) || settings.whatsapp;
   const url = `https://wa.me/${numero}?text=${msg}`;
   window.open(url, '_blank');
+}
+
+// ── PDF do pedido (com foto de cada item) ─────────────────
+async function imagemParaBase64(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('imagem indisponível');
+  const blob = await res.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+function formatoImagem(dataUrl) {
+  return dataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+}
+
+async function gerarPdfPedido(order, repInfo) {
+  if (!window.jspdf) { toast('PDF indisponível neste navegador.', 'error'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const marginX = 14;
+  const rightX = 196;
+  let y = 20;
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
+  doc.setTextColor(20, 20, 20);
+  doc.text('KE PORTAL', marginX, y);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+  doc.setTextColor(160, 125, 40);
+  doc.text(`Colcci On The Move · Pedido #${order.id.slice(-6).toUpperCase()}`, marginX, y + 6);
+  doc.setDrawColor(200, 165, 70); doc.setLineWidth(0.6);
+  doc.line(marginX, y + 10, rightX, y + 10);
+  y += 20;
+
+  doc.setFontSize(10.5);
+  const infoLinhas = [
+    ['Razão Social', order.buyer.razao],
+    ['CNPJ', order.buyer.cnpj],
+    ['Comprador', order.buyer.name],
+    ['WhatsApp', order.buyer.phone],
+    ['Data do pedido', fmtDate(order.date)],
+  ];
+  if (repInfo && repInfo.nome) infoLinhas.push(['Representante', repInfo.nome]);
+  infoLinhas.forEach(([label, val]) => {
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(60, 60, 60);
+    doc.text(label + ':', marginX, y);
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20);
+    doc.text(String(val || '—'), marginX + 34, y);
+    y += 6;
+  });
+
+  y += 4;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(20, 20, 20);
+  doc.text(`Itens do pedido (${order.items.length})`, marginX, y);
+  y += 7;
+
+  const boxH = 24;
+  for (const item of order.items) {
+    if (y + boxH > 280) { doc.addPage(); y = 20; }
+
+    const prod = getProducts().find(p => p.id === item.productId);
+    const imgSrc = prod ? productImage(prod, item.color) : null;
+    let imgData = null;
+    if (imgSrc) { try { imgData = await imagemParaBase64(imgSrc); } catch { imgData = null; } }
+
+    doc.setDrawColor(225, 225, 225); doc.setLineWidth(0.3);
+    doc.roundedRect(marginX, y, rightX - marginX, boxH, 1.5, 1.5);
+    if (imgData) {
+      try { doc.addImage(imgData, formatoImagem(imgData), marginX + 2, y + 2, boxH - 4, boxH - 4); }
+      catch { /* segue sem a foto se o formato não for suportado */ }
+    }
+
+    const textX = marginX + boxH + 3;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(20, 20, 20);
+    doc.text(item.productName, textX, y + 8, { maxWidth: 105 });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(110, 110, 110);
+    doc.text(`${item.productCode}${item.color ? ' · ' + item.color : ''}`, textX, y + 14);
+    doc.text(`${item.qty} un. × ${fmt(item.unitPrice)}`, textX, y + 19);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(20, 20, 20);
+    doc.text(fmt(item.total), rightX - 3, y + 14, { align: 'right' });
+
+    y += boxH + 3;
+  }
+
+  y += 3;
+  doc.setDrawColor(200, 165, 70); doc.setLineWidth(0.6);
+  doc.line(marginX, y, rightX, y);
+  y += 9;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(20, 20, 20);
+  doc.text('TOTAL', marginX, y);
+  doc.text(fmt(order.totalValue), rightX - 3, y, { align: 'right' });
+
+  if (order.notes) {
+    y += 9;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(90, 90, 90);
+    doc.text(`Obs.: ${order.notes}`, marginX, y, { maxWidth: rightX - marginX });
+  }
+
+  doc.save(`pedido-${order.id.slice(-6).toUpperCase()}.pdf`);
 }
 
 // ── Bindings ──────────────────────────────────────────────
