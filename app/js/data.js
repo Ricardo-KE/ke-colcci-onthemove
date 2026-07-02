@@ -17,7 +17,7 @@ function getSettings() {
     brand:       'Colcci',
     adminEmail:  'contato@ke.com.br',
     adminPass:   'ke2027',
-    minOrder:    4500,
+    minOrder:    3500,
   };
   const saved = JSON.parse(localStorage.getItem(DB.SETTINGS) || '{}');
   return { ...defaults, ...saved };
