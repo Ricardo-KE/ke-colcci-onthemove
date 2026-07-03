@@ -102,6 +102,15 @@ function updateOrderStatus(id, status) {
   if (typeof pushOrderStatus === 'function') pushOrderStatus(id, status);
 }
 
+// ── Rastreamento (acesso ao catálogo + carrinho em andamento) ─
+// Preenchidos via /api/me (loadMe), escopados por representante no servidor.
+function getAccess() {
+  return JSON.parse(localStorage.getItem('ke_access') || '{}');
+}
+function getCarts() {
+  return JSON.parse(localStorage.getItem('ke_carts') || '{}');
+}
+
 // ── Helpers ───────────────────────────────────────────────
 function uuid() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {

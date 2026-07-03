@@ -146,3 +146,34 @@ tr:hover td { background: #fafafa; }
   .form-row { grid-template-columns: 1fr; }
   .meta-hero .big-pct { font-size: 2.4rem; }
 }
+
+/* ── OPORTUNIDADES QUENTES ─────────────────────────────────── */
+.opp-list { display: flex; flex-direction: column; gap: 10px; }
+.opp-card {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 14px 18px; border-left: 4px solid var(--mid);
+}
+.opp-card.opp-warn { border-left-color: #d9a441; background: #fffaf0; }
+.opp-card.opp-info { border-left-color: #6a9bd8; background: #f4f9ff; }
+.opp-main { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 220px; }
+.opp-main strong { font-size: .92rem; color: var(--dark); }
+.opp-sub { font-size: .78rem; color: var(--mid); }
+.opp-time { font-size: .76rem; color: #999; white-space: nowrap; }
+
+/* ── FILTER CHIPS ──────────────────────────────────────────── */
+.filter-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip {
+  padding: 7px 16px; border-radius: 20px; border: 1.5px solid #ddd;
+  background: var(--white); cursor: pointer; font-size: .82rem; font-weight: 700; color: var(--mid);
+  transition: all .18s;
+}
+.chip.active, .chip:hover { background: var(--gold); border-color: var(--gold); color: var(--dark); }
+
+/* ── STATUS BADGES (tabela de lojistas) ───────────────────── */
+.status-badge { display: inline-block; padding: 3px 10px; border-radius: 14px; font-size: .76rem; font-weight: 700; white-space: nowrap; }
+.status-badge.badge-info    { background: rgba(106,155,216,.15); color: #3a6ea8; }
+.status-badge.badge-warn    { background: rgba(217,164,65,.18);  color: #a06f14; }
+.status-badge.badge-danger  { background: rgba(224,82,82,.15);   color: var(--danger); }
+.status-badge.badge-success { background: rgba(82,168,110,.15);  color: var(--success); }
+.status-badge.badge-muted   { background: #eee; color: #888; }

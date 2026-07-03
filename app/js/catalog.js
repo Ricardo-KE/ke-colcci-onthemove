@@ -33,12 +33,40 @@ document.addEventListener('DOMContentLoaded', () => {
   bindEvents();
   // sincroniza configurações (WhatsApp/coleção) do servidor, sem bloquear
   if (typeof pullSettings === 'function') pullSettings().catch(() => {});
+
+  // Rastreamento de acesso (painel "Oportunidades Quentes" do representante).
+  // Link individual (?loja=CNPJ) identifica o lojista; sem isso, usamos o
+  // último CNPJ conhecido neste navegador (digitado antes ao finalizar pedido).
+  const linkCnpj = new URLSearchParams(location.search).get('loja');
+  if (linkCnpj) setVisitCnpj(linkCnpj);
+  const visitCnpj = getVisitCnpj();
+  if (visitCnpj && typeof pingAccess === 'function') pingAccess(visitCnpj);
 });
+
+// ── Rastreamento: CNPJ do visitante deste navegador ───────
+function getVisitCnpj() { return localStorage.getItem('ke_visit_cnpj') || ''; }
+function setVisitCnpj(cnpj) {
+  const d = onlyDigits(cnpj);
+  if (d.length === 14) localStorage.setItem('ke_visit_cnpj', d);
+}
+let _cartSyncTimer = null;
+function scheduleCartSync() {
+  clearTimeout(_cartSyncTimer);
+  _cartSyncTimer = setTimeout(() => {
+    const cnpj = getVisitCnpj();
+    if (!cnpj || typeof pushCartSnapshot !== 'function') return;
+    if (!cart.length) { if (typeof clearCartSnapshot === 'function') clearCartSnapshot(cnpj); return; }
+    const items = cart.map(i => ({ productName: i.product.name, color: i.color, qty: i.qty }));
+    const totalValue = cart.reduce((s, i) => s + i.product.price * i.qty, 0);
+    pushCartSnapshot(cnpj, items, totalValue);
+  }, 800);
+}
 
 // ── Persistência do carrinho (localStorage) ───────────────
 function saveCart() {
   localStorage.setItem('ke_cart', JSON.stringify(
     cart.map(i => ({ id: i.product.id, color: i.color, qty: i.qty }))));
+  scheduleCartSync();
 }
 function loadCart() {
   try {
@@ -488,6 +516,8 @@ async function submitOrder() {
 
   sendWhatsApp(order, rep.whatsapp);
 
+  if (typeof clearCartSnapshot === 'function') clearCartSnapshot(onlyDigits(cnpj));
+
   cart = [];
   saveCart();
   updateCartBadge();
@@ -646,6 +676,7 @@ function bindEvents() {
   document.getElementById('order-modal').addEventListener('input', e => {
     if (e.target.id === 'o-cnpj') {
       e.target.value = maskCNPJ(e.target.value);
+      setVisitCnpj(e.target.value);
     }
     if (e.target.id === 'o-phone') {
       e.target.value = maskPhone(e.target.value);

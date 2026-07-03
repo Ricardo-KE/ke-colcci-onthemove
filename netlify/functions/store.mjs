@@ -60,6 +60,38 @@ export default async (req) => {
     return j({ representante_id: rep ? rep.id : null, whatsapp: (rep && rep.whatsapp) || null, nome: rep ? rep.nome : null });
   }
 
+  // Rastreamento de acesso ao catálogo — usado no painel "Oportunidades
+  // Quentes" do representante (último acesso / carrinho em andamento).
+  // Aberto: o catálogo não exige login, só sabe o CNPJ quando o lojista
+  // chega por um link individual ou já digitou o CNPJ antes.
+  if (req.method === 'POST' && key === 'access' && action === 'ping') {
+    const b = await req.json().catch(() => null);
+    const cnpj = onlyd(b && b.cnpj);
+    if (!cnpj) return j({ error: 'cnpj obrigatório' }, 400);
+    const doc = await getDoc('access');
+    doc[cnpj] = new Date().toISOString();
+    await store().setJSON('access', doc);
+    return j({ ok: true });
+  }
+  if (req.method === 'POST' && key === 'carts' && action === 'set') {
+    const b = await req.json().catch(() => null);
+    const cnpj = onlyd(b && b.cnpj);
+    if (!cnpj) return j({ error: 'cnpj obrigatório' }, 400);
+    const doc = await getDoc('carts');
+    doc[cnpj] = { items: Array.isArray(b.items) ? b.items : [], totalValue: Number(b.totalValue) || 0, updatedAt: new Date().toISOString() };
+    await store().setJSON('carts', doc);
+    return j({ ok: true });
+  }
+  if (req.method === 'POST' && key === 'carts' && action === 'clear') {
+    const b = await req.json().catch(() => null);
+    const cnpj = onlyd(b && b.cnpj);
+    if (!cnpj) return j({ error: 'cnpj obrigatório' }, 400);
+    const doc = await getDoc('carts');
+    delete doc[cnpj];
+    await store().setJSON('carts', doc);
+    return j({ ok: true });
+  }
+
   // Confirmar/recusar pedido: master (qualquer um) ou representante (só da própria carteira)
   if (req.method === 'POST' && key === 'orders' && action === 'update') {
     const p = verify(bearer(req));
@@ -81,7 +113,7 @@ export default async (req) => {
   // ── Daqui pra baixo: só master ─────────────────────────
   const p = verify(bearer(req));
   if (!p || p.role !== 'master') return j({ error: 'não autorizado' }, 401);
-  if (!['entities', 'orders'].includes(key)) return j({ error: 'key inválida' }, 400);
+  if (!['entities', 'orders', 'access', 'carts'].includes(key)) return j({ error: 'key inválida' }, 400);
 
   try {
     if (req.method === 'GET') return j(await getDoc(key));

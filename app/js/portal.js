@@ -651,23 +651,164 @@ function confirmarPedido(id, status) {
   refresh();
 }
 
+// ── REP: rastreamento — carrinho/acesso por CNPJ da carteira ─
+function fmtRelative(iso) {
+  if (!iso) return null;
+  const ms = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(ms / 60000);
+  if (min < 1) return 'Agora mesmo';
+  if (min < 60) return `Há ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `Há ${h} hora${h === 1 ? '' : 's'}`;
+  const d = Math.floor(h / 24);
+  return `Há ${d} dia${d === 1 ? '' : 's'}`;
+}
+function telefoneDoLojista(cnpj) {
+  const d = onlyDigits(cnpj);
+  const pedido = getOrders().filter(o => onlyDigits(o.buyer && o.buyer.cnpj) === d)
+    .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+  return pedido ? pedido.buyer.phone : null;
+}
+// Classifica o lojista pra badge de status + filtro rápido.
+// Prioridade: pedido pendente > carrinho ativo > inativo (30+ dias) > em dia.
+function statusInfoLojista(c) {
+  const d = onlyDigits(c.cnpj);
+  const pendente = pedidosDaCarteira().find(o => o.status === 'pending' && onlyDigits(o.buyer.cnpj) === d);
+  const cart = getCarts()[d];
+  const lastAccess = getAccess()[d];
+  const diasSemAcesso = lastAccess ? (Date.now() - new Date(lastAccess).getTime()) / 86400000 : Infinity;
+
+  if (pendente) return { bucket: 'pedido', label: '⏳ Para confirmar', cls: 'badge-info' };
+  if (cart && cart.totalValue > 0) return { bucket: 'carrinho', label: '🟡 Carrinho abandonado', cls: 'badge-warn' };
+  if (diasSemAcesso > 30) return { bucket: 'inativo', label: '🔴 Inativo', cls: 'badge-danger' };
+  const confirmados = pedidosDaCarteira().filter(o => o.status === 'confirmed' && onlyDigits(o.buyer.cnpj) === d);
+  if (confirmados.length) return { bucket: 'confirmado', label: '🟢 Pedido confirmado', cls: 'badge-success' };
+  return { bucket: 'ativo', label: lastAccess ? '⚪ Navegando' : '— Sem atividade', cls: 'badge-muted' };
+}
+function mensagemRecuperarCarrinho(c, cart) {
+  const itens = (cart.items || []).map(i => `• ${i.productName}${i.color ? ' (' + i.color + ')' : ''} × ${i.qty}`).join('\n');
+  return [
+    `Olá, ${c.razao_social}! 👋`,
+    ``,
+    `Vi que você separou alguns itens no carrinho da coleção ${colecaoAtiva()} e não finalizou o pedido:`,
+    ``,
+    itens,
+    ``,
+    `💰 Total: ${fmt(cart.totalValue)}`,
+    ``,
+    `Posso te ajudar a fechar? Qualquer dúvida sobre tamanho, cor ou prazo é só me chamar. 🤝`,
+  ].join('\n');
+}
+function recuperarVenda(cnpj) {
+  const c = clientById2(cnpj);
+  const cart = getCarts()[onlyDigits(cnpj)];
+  if (!c || !cart) return;
+  const msg = mensagemRecuperarCarrinho(c, cart);
+  const fone = onlyDigits(telefoneDoLojista(cnpj) || '');
+  if (fone) {
+    window.open(`https://wa.me/${fone}?text=${encodeURIComponent(msg)}`, '_blank');
+  } else {
+    copiarTexto(msg).then(ok => toast(ok ? 'Mensagem copiada! Cole no WhatsApp do lojista.' : 'Copie a mensagem manualmente.', ok ? 'success' : 'info'));
+  }
+}
+function chamarLojista(cnpj) {
+  const c = clientById2(cnpj);
+  if (!c) return;
+  const msg = `Olá, ${c.razao_social}! 👋\n\nVi que você deu uma olhada no catálogo da coleção ${colecaoAtiva()}. Posso te ajudar a montar o pedido? 🛍️`;
+  const fone = onlyDigits(telefoneDoLojista(cnpj) || '');
+  if (fone) window.open(`https://wa.me/${fone}?text=${encodeURIComponent(msg)}`, '_blank');
+  else copiarTexto(msg).then(ok => toast(ok ? 'Mensagem copiada! Cole no WhatsApp do lojista.' : 'Copie a mensagem manualmente.', ok ? 'success' : 'info'));
+}
+// clientById já existe pra uso geral (master); aqui buscamos só na própria carteira.
+function clientById2(cnpj) {
+  const d = onlyDigits(cnpj);
+  return clientesComProgresso(session.id).find(c => onlyDigits(c.cnpj) === d);
+}
+
 // ── REP: Minha Carteira ───────────────────────────────────
+let filtroCarteira = 'todos';
+let selecionadosCarteira = new Set();
+
+function toggleFiltroCarteira(f) { filtroCarteira = f; selecionadosCarteira.clear(); refresh(); }
+function toggleSelecaoLojista(cnpj) {
+  const d = onlyDigits(cnpj);
+  if (selecionadosCarteira.has(d)) selecionadosCarteira.delete(d); else selecionadosCarteira.add(d);
+  refresh();
+}
+function enviarMensagemSelecionados() {
+  const clientes = clientesComProgresso(session.id).filter(c => selecionadosCarteira.has(onlyDigits(c.cnpj)));
+  copiarMensagensEmLote(clientes);
+}
+
 function renderCarteira() {
-  const clientes = clientesComProgresso(session.id).sort((a, b) => a.razao_social.localeCompare(b.razao_social));
-  const metaTotal = clientes.reduce((s, c) => s + c.progresso.valorMeta, 0);
-  const vendidoTotal = clientes.reduce((s, c) => s + c.progresso.vendido, 0);
+  const todos = clientesComProgresso(session.id).sort((a, b) => a.razao_social.localeCompare(b.razao_social));
+  const metaTotal = todos.reduce((s, c) => s + c.progresso.valorMeta, 0);
+  const vendidoTotal = todos.reduce((s, c) => s + c.progresso.vendido, 0);
   const pct = metaTotal > 0 ? Math.round(vendidoTotal / metaTotal * 1000) / 10 : 0;
   const pedidos = pedidosDaCarteira();
   const pendentes = pedidos.filter(o => o.status === 'pending');
 
+  const carts = getCarts();
+  const access = getAccess();
+  const meusCnpjs = todos.map(c => onlyDigits(c.cnpj));
+  const carrinhosAtivos = meusCnpjs.map(d => ({ cnpj: d, cart: carts[d] })).filter(x => x.cart && x.cart.totalValue > 0);
+  const valorEmCarrinho = carrinhosAtivos.reduce((s, x) => s + x.cart.totalValue, 0);
+  const ativos7d = meusCnpjs.filter(d => access[d] && (Date.now() - new Date(access[d]).getTime()) / 86400000 <= 7).length;
+
+  // ── Oportunidades quentes: carrinho abandonado (ordenado por valor) +
+  //    acesso recente sem nada no carrinho (navegou mas não comprou) ──
+  const oportunidadesCarrinho = carrinhosAtivos
+    .map(x => ({ ...x, cliente: todos.find(c => onlyDigits(c.cnpj) === x.cnpj) }))
+    .filter(x => x.cliente)
+    .sort((a, b) => b.cart.totalValue - a.cart.totalValue);
+  const oportunidadesNavegacao = meusCnpjs
+    .filter(d => !carts[d] && access[d] && (Date.now() - new Date(access[d]).getTime()) / 3600000 <= 48)
+    .map(d => ({ cnpj: d, cliente: todos.find(c => onlyDigits(c.cnpj) === d), access: access[d] }))
+    .filter(x => x.cliente)
+    .sort((a, b) => new Date(b.access) - new Date(a.access));
+
+  const clientesFiltrados = todos.filter(c => {
+    if (filtroCarteira === 'todos') return true;
+    return statusInfoLojista(c).bucket === filtroCarteira;
+  });
+  const countBucket = (b) => todos.filter(c => statusInfoLojista(c).bucket === b).length;
+
   return `
     <div class="section-header"><h2>Minha Carteira · ${esc(colecaoAtiva())}</h2></div>
     <div class="kpi-grid">
-      <div class="kpi"><div class="label">Meus lojistas</div><div class="value">${clientes.length}</div></div>
+      <div class="kpi"><div class="label">Meus lojistas</div><div class="value">${todos.length}</div></div>
       <div class="kpi"><div class="label">Meta total</div><div class="value gold">${fmt(metaTotal)}</div></div>
       <div class="kpi"><div class="label">Vendido</div><div class="value">${fmt(vendidoTotal)}</div></div>
       <div class="kpi"><div class="label">% atingido</div><div class="value gold">${pct}%</div></div>
+      <div class="kpi"><div class="label">Em carrinho</div><div class="value" style="color:#b9760a">${fmt(valorEmCarrinho)}</div><div class="sub">${carrinhosAtivos.length} lojista${carrinhosAtivos.length === 1 ? '' : 's'}</div></div>
+      <div class="kpi"><div class="label">Ativos (7 dias)</div><div class="value" style="color:var(--success)">${ativos7d}/${todos.length}</div></div>
     </div>
+
+    <div class="section-header">
+      <h2>🔥 Oportunidades Quentes</h2>
+      ${(oportunidadesCarrinho.length + oportunidadesNavegacao.length) ? `<span class="hint">${oportunidadesCarrinho.length + oportunidadesNavegacao.length} lojista${(oportunidadesCarrinho.length + oportunidadesNavegacao.length) === 1 ? '' : 's'} precisam de atenção</span>` : ''}
+    </div>
+    ${(oportunidadesCarrinho.length || oportunidadesNavegacao.length) ? `
+    <div class="opp-list" style="margin-bottom:26px">
+      ${oportunidadesCarrinho.map(x => `
+        <div class="opp-card opp-warn">
+          <div class="opp-main">
+            <strong>🛒 ${esc(x.cliente.razao_social)}</strong>
+            <span class="opp-sub">${fmt(x.cart.totalValue)} no carrinho · ${(x.cart.items || []).length} ite${(x.cart.items || []).length === 1 ? 'm' : 'ns'} parado${(x.cart.items || []).length === 1 ? '' : 's'}</span>
+          </div>
+          <div class="opp-time">${fmtRelative(x.cart.updatedAt)}</div>
+          <button class="btn btn-sm btn-gold" onclick="recuperarVenda('${x.cnpj}')">💬 Recuperar Venda</button>
+        </div>`).join('')}
+      ${oportunidadesNavegacao.map(x => `
+        <div class="opp-card opp-info">
+          <div class="opp-main">
+            <strong>👀 ${esc(x.cliente.razao_social)}</strong>
+            <span class="opp-sub">Acessou o catálogo, carrinho ainda vazio</span>
+          </div>
+          <div class="opp-time">${fmtRelative(x.access)}</div>
+          <button class="btn btn-sm btn-outline" onclick="chamarLojista('${x.cnpj}')">💬 Chamar Lojista</button>
+        </div>`).join('')}
+    </div>` : `<div class="empty-block" style="padding:24px;margin-bottom:26px"><div class="icon" style="font-size:2rem">✨</div><p>Nenhuma oportunidade quente agora — carteira em dia.</p></div>`}
 
     <div class="section-header">
       <h2>Pedidos para confirmar</h2>
@@ -697,23 +838,39 @@ function renderCarteira() {
       </table>
     </div>` : `<div class="empty-block" style="padding:30px;margin-bottom:26px"><div class="icon" style="font-size:2rem">📦</div><p>Nenhum pedido da sua carteira ainda.</p></div>`}
 
-    ${clientes.length ? `
+    ${todos.length ? `
     <div class="section-header">
       <h2>Meus lojistas</h2>
-      <button class="btn btn-outline btn-sm" onclick="copiarMensagensEmLote(clientesComProgresso(session.id))">💬 Copiar mensagens de todos (${clientes.length})</button>
+      ${selecionadosCarteira.size
+        ? `<button class="btn btn-gold btn-sm" onclick="enviarMensagemSelecionados()">💬 Enviar mensagem para os ${selecionadosCarteira.size} selecionados</button>`
+        : `<button class="btn btn-outline btn-sm" onclick="copiarMensagensEmLote(clientesComProgresso(session.id))">💬 Copiar mensagens de todos (${todos.length})</button>`}
+    </div>
+    <div class="filter-chips" style="margin-bottom:14px">
+      <button class="chip ${filtroCarteira === 'todos' ? 'active' : ''}" onclick="toggleFiltroCarteira('todos')">Todos ${todos.length}</button>
+      <button class="chip ${filtroCarteira === 'carrinho' ? 'active' : ''}" onclick="toggleFiltroCarteira('carrinho')">🛒 Montando pedido ${countBucket('carrinho')}</button>
+      <button class="chip ${filtroCarteira === 'pedido' ? 'active' : ''}" onclick="toggleFiltroCarteira('pedido')">⏳ Para confirmar ${countBucket('pedido')}</button>
+      <button class="chip ${filtroCarteira === 'inativo' ? 'active' : ''}" onclick="toggleFiltroCarteira('inativo')">🔴 Inativos ${countBucket('inativo')}</button>
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Lojista</th><th>Cidade/UF</th><th class="meta-cell">Progresso</th><th>Status</th><th>Acesso</th></tr></thead>
+        <thead><tr><th></th><th>Lojista</th><th>Cidade/UF</th><th class="meta-cell">Progresso</th><th>Último acesso</th><th>Carrinho</th><th>Status</th><th>Acesso</th></tr></thead>
         <tbody>
-          ${clientes.map(c => `
+          ${clientesFiltrados.map(c => {
+            const d = onlyDigits(c.cnpj);
+            const info = statusInfoLojista(c);
+            const cart = carts[d];
+            return `
             <tr class="${c.ativo ? '' : 'inactive-row'}">
+              <td><input type="checkbox" ${selecionadosCarteira.has(d) ? 'checked' : ''} onchange="toggleSelecaoLojista('${c.cnpj}')"></td>
               <td><strong>${esc(c.razao_social)}</strong><br><span class="muted" style="font-size:.76rem">${fmtCnpj(c.cnpj)}</span></td>
               <td>${c.cidade ? esc(c.cidade) + '/' + esc(c.estado || '') : '<span class="muted">—</span>'}</td>
               <td>${progressBar(c.progresso)}</td>
-              <td>${statusPill(c.progresso)}</td>
+              <td>${access[d] ? fmtRelative(access[d]) : '<span class="muted">—</span>'}</td>
+              <td>${cart && cart.totalValue > 0 ? fmt(cart.totalValue) : '<span class="muted">—</span>'}</td>
+              <td><span class="status-badge ${info.cls}">${info.label}</span></td>
               <td><button class="btn btn-sm btn-outline" onclick="copiarLinkLojista('${c.cnpj}','${esc(c.razao_social).replace(/'/g, "\\'")}')" title="Copiar mensagem de acesso pronta pro WhatsApp">💬 Mensagem</button></td>
-            </tr>`).join('')}
+            </tr>`;
+          }).join('')}
         </tbody>
       </table>
     </div>
@@ -746,7 +903,7 @@ function renderMinhaMeta() {
           ? `<p style="color:var(--success);font-weight:700;margin-top:16px">🎉 Parabéns! Meta atingida.</p>`
           : `<p style="color:var(--mid);margin-top:16px">Faltam <strong>${fmt(prog.restante)}</strong> para bater sua meta.</p>`}
       ` : `<p style="color:#999;margin-top:18px">Sua meta ainda não foi definida pelo representante.</p>`}
-      <a href="index.html" class="btn btn-gold btn-full" style="margin-top:20px" target="_blank">👜 Fazer pedido no catálogo</a>
+      <a href="index.html?loja=${onlyDigits(c.cnpj)}" class="btn btn-gold btn-full" style="margin-top:20px" target="_blank">👜 Fazer pedido no catálogo</a>
     </div>
     <p style="font-size:.78rem;color:#999;text-align:center">O progresso considera seus pedidos (não cancelados) feitos pelo catálogo com este CNPJ.</p>`;
 }
@@ -781,7 +938,7 @@ function renderPedidosLojista() {
       </table>
     </div>
     <p style="font-size:.78rem;color:#999;margin-top:14px">O status é atualizado pelo seu representante assim que o pedido é confirmado.</p>
-    ` : `<div class="empty-block"><div class="icon">📦</div><p>Você ainda não fez nenhum pedido.</p><a href="index.html" class="btn btn-gold btn-sm" style="margin-top:10px" target="_blank">👜 Ir para o catálogo</a></div>`}`;
+    ` : `<div class="empty-block"><div class="icon">📦</div><p>Você ainda não fez nenhum pedido.</p><a href="index.html?loja=${onlyDigits(clientById(session.id).cnpj)}" class="btn btn-gold btn-sm" style="margin-top:10px" target="_blank">👜 Ir para o catálogo</a></div>`}`;
 }
 
 // ── Modal / utils ─────────────────────────────────────────

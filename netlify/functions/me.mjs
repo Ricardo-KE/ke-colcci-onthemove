@@ -38,6 +38,8 @@ export default async (req) => {
 
   const ent = await getDoc('entities');
   const orders = await getDoc('orders');
+  const access = await getDoc('access');
+  const carts = await getDoc('carts');
   const settings = publicSettings(ent.settings);
 
   if (p.role === 'master') {
@@ -48,7 +50,7 @@ export default async (req) => {
       clientes: ent.clientes || [],
       metas: ent.metas || [],
       settings: ent.settings || {},
-      orders,
+      orders, access, carts,
     });
   }
 
@@ -59,10 +61,13 @@ export default async (req) => {
     const rep = (ent.representantes || []).find(r => r.id === p.id);
     const meusCnpjs = new Set(clientes.map(c => onlyd(c.cnpj)));
     const meusPedidos = orders.filter(o => meusCnpjs.has(onlyd(o.buyer && o.buyer.cnpj)));
+    const meuAccess = Object.fromEntries(Object.entries(access).filter(([cnpj]) => meusCnpjs.has(cnpj)));
+    const meusCarts = Object.fromEntries(Object.entries(carts).filter(([cnpj]) => meusCnpjs.has(cnpj)));
     return j({
       role: 'rep', id: p.id, nome: p.nome,
       representantes: rep ? [noSenha(rep)] : [],
       clientes, metas, settings, orders: meusPedidos,
+      access: meuAccess, carts: meusCarts,
     });
   }
 

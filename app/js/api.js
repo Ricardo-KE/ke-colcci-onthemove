@@ -17,6 +17,8 @@ const LSK = {
   metas:          'ke_metas',
   settings:       'ke_settings',
   orders:         'ke_orders',
+  access:         'ke_access',
+  carts:          'ke_carts',
 };
 
 function getToken() { return sessionStorage.getItem(TOKEN_KEY) || ''; }
@@ -73,6 +75,8 @@ async function loadMe() {
   localStorage.setItem(LSK.clientes,       JSON.stringify(d.clientes || []));
   localStorage.setItem(LSK.metas,          JSON.stringify(d.metas || []));
   localStorage.setItem(LSK.orders,         JSON.stringify(d.orders || []));
+  localStorage.setItem(LSK.access,         JSON.stringify(d.access || {}));
+  localStorage.setItem(LSK.carts,          JSON.stringify(d.carts || {}));
   if (d.settings) {
     const cur = JSON.parse(localStorage.getItem(LSK.settings) || '{}');
     localStorage.setItem(LSK.settings, JSON.stringify({ ...cur, ...d.settings }));
@@ -122,6 +126,36 @@ async function pushOrderStatus(id, status) {
       body: JSON.stringify({ id, status }),
     });
   } catch (e) { console.warn('pushOrderStatus falhou:', e.message); }
+}
+
+// ── Rastreamento (catálogo): acesso + carrinho em andamento ─
+// Usado pelo painel "Oportunidades Quentes" do representante.
+async function pingAccess(cnpj) {
+  if (!cnpj) return;
+  try {
+    await _fetch(`${API}/api/store?key=access&action=ping`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ cnpj }),
+    });
+  } catch (e) { /* silencioso — tracking não pode travar o catálogo */ }
+}
+async function pushCartSnapshot(cnpj, items, totalValue) {
+  if (!cnpj) return;
+  try {
+    await _fetch(`${API}/api/store?key=carts&action=set`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ cnpj, items, totalValue }),
+    });
+  } catch (e) { /* silencioso */ }
+}
+async function clearCartSnapshot(cnpj) {
+  if (!cnpj) return;
+  try {
+    await _fetch(`${API}/api/store?key=carts&action=clear`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ cnpj }),
+    });
+  } catch (e) { /* silencioso */ }
 }
 
 // orders (master): leitura completa, usada pelo admin
