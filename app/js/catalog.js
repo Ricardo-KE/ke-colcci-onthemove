@@ -496,6 +496,7 @@ async function submitOrder() {
       productCode: i.product.code,
       productName: i.product.name,
       color:       i.color,
+      image:       productImage(i.product, i.color),
       qty:         i.qty,
       unitPrice:   i.product.price,
       total:       i.product.price * i.qty,

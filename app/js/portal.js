@@ -119,7 +119,7 @@ const TABS = {
   rep:     [{ id: 'carteira', label: '🎯 Minha Carteira' }],
   lojista: [
     { id: 'minhameta', label: '🎯 Minha Meta' },
-    { id: 'pedidos',   label: '📦 Meus Pedidos' },
+    { id: 'pedidos',   label: '📋 Meus Dados & Pedidos' },
   ],
 };
 
@@ -908,7 +908,7 @@ function renderMinhaMeta() {
     <p style="font-size:.78rem;color:#999;text-align:center">O progresso considera seus pedidos (não cancelados) feitos pelo catálogo com este CNPJ.</p>`;
 }
 
-// ── LOJISTA: Meus Pedidos (histórico) ─────────────────────
+// ── LOJISTA: Meus Dados & Histórico de Pedidos ────────────
 function pedidosDoLojista() {
   const c = clientById(session.id);
   if (!c) return [];
@@ -916,29 +916,63 @@ function pedidosDoLojista() {
   return getOrders().filter(o => onlyDigits(o.buyer && o.buyer.cnpj) === meuCnpj)
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 }
+function statusBadgeLojista(s) {
+  const map = {
+    pending:   { label: '⏳ Em processamento', cls: 'badge-info' },
+    confirmed: { label: '✅ Confirmado', cls: 'badge-success' },
+    shipped:   { label: '🚚 Enviado', cls: 'badge-success' },
+    cancelled: { label: '❌ Recusado', cls: 'badge-danger' },
+  };
+  return map[s] || { label: s, cls: 'badge-muted' };
+}
 function renderPedidosLojista() {
+  const c = clientById(session.id);
+  if (!c) return `<div class="empty-block"><div class="icon">⚠️</div><p>Cadastro não encontrado.</p></div>`;
+  const rep = repById(c.representante_id);
   const pedidos = pedidosDoLojista();
 
   return `
-    <div class="section-header"><h2>Meus Pedidos · ${esc(colecaoAtiva())}</h2></div>
+    <div class="section-header"><h2>Meus Dados & Pedidos · ${esc(colecaoAtiva())}</h2></div>
+
+    <div class="dados-card" style="margin-bottom:30px">
+      <div class="dados-field"><span class="dados-label">Razão Social</span><span class="dados-value">${esc(c.razao_social)}</span></div>
+      <div class="dados-field"><span class="dados-label">CNPJ</span><span class="dados-value">${fmtCnpj(c.cnpj)}</span></div>
+      <div class="dados-field"><span class="dados-label">Cidade/UF</span><span class="dados-value">${c.cidade ? esc(c.cidade) + '/' + esc(c.estado || '') : '—'}</span></div>
+      <div class="dados-field"><span class="dados-label">Representante</span><span class="dados-value">${rep ? esc(rep.nome) : '—'}</span></div>
+    </div>
+
+    <div class="section-header"><h3 style="font-weight:600;letter-spacing:.04em;color:var(--mid);text-transform:uppercase;font-size:.82rem">Histórico de Pedidos</h3></div>
     ${pedidos.length ? `
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Pedido</th><th>Data</th><th>Itens</th><th>Total</th><th>Status</th></tr></thead>
-        <tbody>
-          ${pedidos.map(o => `
-            <tr>
-              <td><strong>#${o.id.slice(-6).toUpperCase()}</strong></td>
-              <td>${fmtDate(o.date)}</td>
-              <td>${o.items.length} ref. · ${o.items.reduce((s,i)=>s+i.qty,0)} peças</td>
-              <td>${fmt(o.totalValue)}</td>
-              <td>${statusLabelRep(o.status)}</td>
-            </tr>`).join('')}
-        </tbody>
-      </table>
+    <div class="order-history">
+      ${pedidos.map(o => {
+        const st = statusBadgeLojista(o.status);
+        return `
+        <div class="order-card">
+          <div class="order-card-header">
+            <div>
+              <span class="order-num">Pedido #${o.id.slice(-6).toUpperCase()}</span>
+              <span class="order-date">${fmtDate(o.date)}</span>
+            </div>
+            <div class="order-head-right">
+              <span class="status-badge ${st.cls}">${st.label}</span>
+              <span class="order-total">${fmt(o.totalValue)}</span>
+            </div>
+          </div>
+          <div class="order-items">
+            ${o.items.map(i => `
+              <div class="order-item">
+                <div class="order-item-img">${i.image ? `<img src="${i.image}" alt="${esc(i.productName)}" onerror="this.parentElement.innerHTML='🛍️'">` : '🛍️'}</div>
+                <div class="order-item-info">
+                  <span class="order-item-name">${esc(i.productName)}</span>
+                  <span class="order-item-meta">${i.color ? esc(i.color) + ' · ' : ''}Qtd. ${i.qty}</span>
+                </div>
+              </div>`).join('')}
+          </div>
+        </div>`;
+      }).join('')}
     </div>
     <p style="font-size:.78rem;color:#999;margin-top:14px">O status é atualizado pelo seu representante assim que o pedido é confirmado.</p>
-    ` : `<div class="empty-block"><div class="icon">📦</div><p>Você ainda não fez nenhum pedido.</p><a href="index.html?loja=${onlyDigits(clientById(session.id).cnpj)}" class="btn btn-gold btn-sm" style="margin-top:10px" target="_blank">👜 Ir para o catálogo</a></div>`}`;
+    ` : `<div class="empty-block"><div class="icon">📦</div><p>Você ainda não fez nenhum pedido.</p><a href="index.html?loja=${onlyDigits(c.cnpj)}" class="btn btn-gold btn-sm" style="margin-top:10px" target="_blank">👜 Ir para o catálogo</a></div>`}`;
 }
 
 // ── Modal / utils ─────────────────────────────────────────
