@@ -114,6 +114,7 @@ const TABS = {
     { id: 'metas',    label: '🎯 Metas & Progresso' },
     { id: 'lojistas', label: '🏪 Lojistas' },
     { id: 'reps',     label: '🧑‍💼 Representantes' },
+    { id: 'acessos',  label: '👀 Acessos & Carrinhos' },
     { id: 'config',   label: '⚙️ Configurações' },
   ],
   rep:     [{ id: 'carteira', label: '🎯 Minha Carteira' }],
@@ -154,6 +155,7 @@ function switchTab(tab) {
     metas:     renderMetas,
     lojistas:  renderLojistas,
     reps:      renderReps,
+    acessos:   renderAcessosMaster,
     config:    renderConfig,
     carteira:  renderCarteira,
     minhameta: renderMinhaMeta,
@@ -634,6 +636,140 @@ function salvarConfig() {
   toast('Configurações salvas!', 'success');
   document.getElementById('nav-ctx').textContent = `Usuário Máximo · ${colecaoAtiva()}`;
   refresh();
+}
+
+// ── MASTER: Acessos & Carrinhos (visão global, todos os lojistas) ─
+let filtroAcessosMaster = 'todos';
+
+function statusInfoLojistaGlobal(c) {
+  const d = onlyDigits(c.cnpj);
+  const pendente = getOrders().find(o => o.status === 'pending' && onlyDigits(o.buyer && o.buyer.cnpj) === d);
+  const cart = getCarts()[d];
+  const lastAccess = getAccess()[d];
+  const diasSemAcesso = lastAccess ? (Date.now() - new Date(lastAccess).getTime()) / 86400000 : Infinity;
+
+  if (pendente) return { bucket: 'pedido', label: '⏳ Para confirmar', cls: 'badge-info' };
+  if (cart && cart.totalValue > 0) return { bucket: 'carrinho', label: '🟡 Carrinho abandonado', cls: 'badge-warn' };
+  if (diasSemAcesso > 30) return { bucket: 'inativo', label: '🔴 Inativo', cls: 'badge-danger' };
+  const confirmados = getOrders().filter(o => o.status === 'confirmed' && onlyDigits(o.buyer && o.buyer.cnpj) === d);
+  if (confirmados.length) return { bucket: 'confirmado', label: '🟢 Pedido confirmado', cls: 'badge-success' };
+  return { bucket: 'ativo', label: lastAccess ? '⚪ Navegando' : '— Sem atividade', cls: 'badge-muted' };
+}
+function toggleFiltroAcessosMaster(f) { filtroAcessosMaster = f; refresh(); }
+function recuperarVendaGlobal(cnpj) {
+  const c = getClients().find(x => onlyDigits(x.cnpj) === onlyDigits(cnpj));
+  const cart = getCarts()[onlyDigits(cnpj)];
+  if (!c || !cart) return;
+  const msg = mensagemRecuperarCarrinho(c, cart);
+  const fone = onlyDigits(telefoneDoLojista(cnpj) || '');
+  if (fone) window.open(`https://wa.me/${fone}?text=${encodeURIComponent(msg)}`, '_blank');
+  else copiarTexto(msg).then(ok => toast(ok ? 'Mensagem copiada! Cole no WhatsApp do lojista.' : 'Copie a mensagem manualmente.', ok ? 'success' : 'info'));
+}
+function chamarLojistaGlobal(cnpj) {
+  const c = getClients().find(x => onlyDigits(x.cnpj) === onlyDigits(cnpj));
+  if (!c) return;
+  const msg = `Olá, ${c.razao_social}! 👋\n\nVi que você deu uma olhada no catálogo da coleção ${colecaoAtiva()}. Posso te ajudar a montar o pedido? 🛍️`;
+  const fone = onlyDigits(telefoneDoLojista(cnpj) || '');
+  if (fone) window.open(`https://wa.me/${fone}?text=${encodeURIComponent(msg)}`, '_blank');
+  else copiarTexto(msg).then(ok => toast(ok ? 'Mensagem copiada! Cole no WhatsApp do lojista.' : 'Copie a mensagem manualmente.', ok ? 'success' : 'info'));
+}
+
+function renderAcessosMaster() {
+  const todos = getClients().filter(c => c.ativo);
+  const carts = getCarts();
+  const access = getAccess();
+  const todosCnpjs = todos.map(c => onlyDigits(c.cnpj));
+
+  const carrinhosAtivos = todosCnpjs.map(d => ({ cnpj: d, cart: carts[d] })).filter(x => x.cart && x.cart.totalValue > 0);
+  const valorEmCarrinho = carrinhosAtivos.reduce((s, x) => s + x.cart.totalValue, 0);
+  const ativos7d = todosCnpjs.filter(d => access[d] && (Date.now() - new Date(access[d]).getTime()) / 86400000 <= 7).length;
+  const ativosHoje = todosCnpjs.filter(d => access[d] && (Date.now() - new Date(access[d]).getTime()) / 3600000 <= 24).length;
+
+  const oportunidadesCarrinho = carrinhosAtivos
+    .map(x => ({ ...x, cliente: todos.find(c => onlyDigits(c.cnpj) === x.cnpj) }))
+    .filter(x => x.cliente)
+    .sort((a, b) => b.cart.totalValue - a.cart.totalValue);
+  const oportunidadesNavegacao = todosCnpjs
+    .filter(d => !carts[d] && access[d] && (Date.now() - new Date(access[d]).getTime()) / 3600000 <= 48)
+    .map(d => ({ cnpj: d, cliente: todos.find(c => onlyDigits(c.cnpj) === d), access: access[d] }))
+    .filter(x => x.cliente)
+    .sort((a, b) => new Date(b.access) - new Date(a.access));
+
+  const clientesFiltrados = todos.filter(c => {
+    if (filtroAcessosMaster === 'todos') return true;
+    return statusInfoLojistaGlobal(c).bucket === filtroAcessosMaster;
+  }).sort((a, b) => {
+    const da = access[onlyDigits(a.cnpj)], db = access[onlyDigits(b.cnpj)];
+    if (da && db) return new Date(db) - new Date(da);
+    return da ? -1 : db ? 1 : a.razao_social.localeCompare(b.razao_social);
+  });
+  const countBucket = (b) => todos.filter(c => statusInfoLojistaGlobal(c).bucket === b).length;
+
+  return `
+    <div class="section-header"><h2>👀 Acessos & Carrinhos · ${esc(colecaoAtiva())}</h2></div>
+    <p style="font-size:.82rem;color:#999;margin-top:-14px;margin-bottom:22px">Quem acessou o catálogo e o que está parado no carrinho, em toda a base — visão que o representante vê só da própria carteira, aqui é de todos os ${todos.length} lojistas ativos.</p>
+    <div class="kpi-grid">
+      <div class="kpi"><div class="label">Lojistas ativos</div><div class="value">${todos.length}</div></div>
+      <div class="kpi"><div class="label">Acessaram hoje</div><div class="value" style="color:var(--success)">${ativosHoje}</div></div>
+      <div class="kpi"><div class="label">Ativos (7 dias)</div><div class="value" style="color:var(--success)">${ativos7d}/${todos.length}</div></div>
+      <div class="kpi"><div class="label">Em carrinho</div><div class="value" style="color:#b9760a">${fmt(valorEmCarrinho)}</div><div class="sub">${carrinhosAtivos.length} lojista${carrinhosAtivos.length === 1 ? '' : 's'}</div></div>
+    </div>
+
+    <div class="section-header">
+      <h2>🔥 Oportunidades Quentes</h2>
+      ${(oportunidadesCarrinho.length + oportunidadesNavegacao.length) ? `<span class="hint">${oportunidadesCarrinho.length + oportunidadesNavegacao.length} lojista${(oportunidadesCarrinho.length + oportunidadesNavegacao.length) === 1 ? '' : 's'} precisam de atenção</span>` : ''}
+    </div>
+    ${(oportunidadesCarrinho.length || oportunidadesNavegacao.length) ? `
+    <div class="opp-list" style="margin-bottom:26px">
+      ${oportunidadesCarrinho.map(x => `
+        <div class="opp-card opp-warn">
+          <div class="opp-main">
+            <strong>🛒 ${esc(x.cliente.razao_social)}</strong>
+            <span class="opp-sub">${fmt(x.cart.totalValue)} no carrinho · ${(x.cart.items || []).length} ite${(x.cart.items || []).length === 1 ? 'm' : 'ns'} parado${(x.cart.items || []).length === 1 ? '' : 's'}</span>
+          </div>
+          <div class="opp-time">${fmtRelative(x.cart.updatedAt)}</div>
+          <button class="btn btn-sm btn-gold" onclick="recuperarVendaGlobal('${x.cnpj}')">💬 Recuperar Venda</button>
+        </div>`).join('')}
+      ${oportunidadesNavegacao.map(x => `
+        <div class="opp-card opp-info">
+          <div class="opp-main">
+            <strong>👀 ${esc(x.cliente.razao_social)}</strong>
+            <span class="opp-sub">Acessou o catálogo, carrinho ainda vazio</span>
+          </div>
+          <div class="opp-time">${fmtRelative(x.access)}</div>
+          <button class="btn btn-sm btn-outline" onclick="chamarLojistaGlobal('${x.cnpj}')">💬 Chamar Lojista</button>
+        </div>`).join('')}
+    </div>` : `<div class="empty-block" style="padding:24px;margin-bottom:26px"><div class="icon" style="font-size:2rem">✨</div><p>Nenhuma oportunidade quente agora — base em dia.</p></div>`}
+
+    <div class="section-header"><h2>Todos os lojistas</h2></div>
+    <div class="filter-chips" style="margin-bottom:14px">
+      <button class="chip ${filtroAcessosMaster === 'todos' ? 'active' : ''}" onclick="toggleFiltroAcessosMaster('todos')">Todos ${todos.length}</button>
+      <button class="chip ${filtroAcessosMaster === 'carrinho' ? 'active' : ''}" onclick="toggleFiltroAcessosMaster('carrinho')">🛒 Montando pedido ${countBucket('carrinho')}</button>
+      <button class="chip ${filtroAcessosMaster === 'pedido' ? 'active' : ''}" onclick="toggleFiltroAcessosMaster('pedido')">⏳ Para confirmar ${countBucket('pedido')}</button>
+      <button class="chip ${filtroAcessosMaster === 'inativo' ? 'active' : ''}" onclick="toggleFiltroAcessosMaster('inativo')">🔴 Inativos ${countBucket('inativo')}</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Lojista</th><th>Representante</th><th>Último acesso</th><th>Carrinho</th><th>Status</th></tr></thead>
+        <tbody>
+          ${clientesFiltrados.slice(0, 400).map(c => {
+            const d = onlyDigits(c.cnpj);
+            const info = statusInfoLojistaGlobal(c);
+            const cart = carts[d];
+            const rep = repById(c.representante_id);
+            return `
+            <tr>
+              <td><strong>${esc(c.razao_social)}</strong><br><span class="muted" style="font-size:.76rem">${fmtCnpj(c.cnpj)}</span></td>
+              <td>${rep ? esc(rep.nome) : '<span class="muted">—</span>'}</td>
+              <td>${access[d] ? fmtRelative(access[d]) : '<span class="muted">—</span>'}</td>
+              <td>${cart && cart.totalValue > 0 ? fmt(cart.totalValue) : '<span class="muted">—</span>'}</td>
+              <td><span class="status-badge ${info.cls}">${info.label}</span></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+    ${clientesFiltrados.length > 400 ? `<p style="font-size:.8rem;color:#999;margin-top:10px">Mostrando 400 de ${clientesFiltrados.length}. Use os filtros pra ver o restante.</p>` : ''}`;
 }
 
 // ── REP: pedidos da carteira (mesmo CNPJ dos seus lojistas) ─
