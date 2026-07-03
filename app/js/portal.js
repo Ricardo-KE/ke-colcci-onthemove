@@ -117,7 +117,10 @@ const TABS = {
     { id: 'config',   label: '⚙️ Configurações' },
   ],
   rep:     [{ id: 'carteira', label: '🎯 Minha Carteira' }],
-  lojista: [{ id: 'minhameta', label: '🎯 Minha Meta' }],
+  lojista: [
+    { id: 'minhameta', label: '🎯 Minha Meta' },
+    { id: 'pedidos',   label: '📦 Meus Pedidos' },
+  ],
 };
 
 let session = null;
@@ -154,6 +157,7 @@ function switchTab(tab) {
     config:    renderConfig,
     carteira:  renderCarteira,
     minhameta: renderMinhaMeta,
+    pedidos:   renderPedidosLojista,
   }[tab];
   c.innerHTML = render ? render() : '';
 }
@@ -745,6 +749,39 @@ function renderMinhaMeta() {
       <a href="index.html" class="btn btn-gold btn-full" style="margin-top:20px" target="_blank">👜 Fazer pedido no catálogo</a>
     </div>
     <p style="font-size:.78rem;color:#999;text-align:center">O progresso considera seus pedidos (não cancelados) feitos pelo catálogo com este CNPJ.</p>`;
+}
+
+// ── LOJISTA: Meus Pedidos (histórico) ─────────────────────
+function pedidosDoLojista() {
+  const c = clientById(session.id);
+  if (!c) return [];
+  const meuCnpj = onlyDigits(c.cnpj);
+  return getOrders().filter(o => onlyDigits(o.buyer && o.buyer.cnpj) === meuCnpj)
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+}
+function renderPedidosLojista() {
+  const pedidos = pedidosDoLojista();
+
+  return `
+    <div class="section-header"><h2>Meus Pedidos · ${esc(colecaoAtiva())}</h2></div>
+    ${pedidos.length ? `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Pedido</th><th>Data</th><th>Itens</th><th>Total</th><th>Status</th></tr></thead>
+        <tbody>
+          ${pedidos.map(o => `
+            <tr>
+              <td><strong>#${o.id.slice(-6).toUpperCase()}</strong></td>
+              <td>${fmtDate(o.date)}</td>
+              <td>${o.items.length} ref. · ${o.items.reduce((s,i)=>s+i.qty,0)} peças</td>
+              <td>${fmt(o.totalValue)}</td>
+              <td>${statusLabelRep(o.status)}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:.78rem;color:#999;margin-top:14px">O status é atualizado pelo seu representante assim que o pedido é confirmado.</p>
+    ` : `<div class="empty-block"><div class="icon">📦</div><p>Você ainda não fez nenhum pedido.</p><a href="index.html" class="btn btn-gold btn-sm" style="margin-top:10px" target="_blank">👜 Ir para o catálogo</a></div>`}`;
 }
 
 // ── Modal / utils ─────────────────────────────────────────
