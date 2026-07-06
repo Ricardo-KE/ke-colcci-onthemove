@@ -322,13 +322,17 @@ function renderTendenciaChart() {
     </svg>`;
 }
 
-// ── MASTER: Metas & Progresso (cadastro de meta individual) ─
+// ── MASTER: Metas & Progresso (dashboard analítico) ────────
 const ROW_CAP = 400;
-let fMetas = { q: '', rep: '' };
+let fMetas = { q: '', rep: '', estado: '', bucket: '' };
+let metasPage = 1;
+let metasPerPage = 10;
 
 function filtrarClientes(f) {
   let list = clientesComProgresso();
   if (f.rep) list = list.filter(c => c.representante_id === f.rep);
+  if (f.estado) list = list.filter(c => (c.estado || '') === f.estado);
+  if (f.bucket) list = list.filter(c => metaStatusInfo(c.progresso).bucket === f.bucket);
   const q = f.q.trim().toLowerCase();
   const dq = onlyDigits(q);
   if (q) list = list.filter(c =>
@@ -341,6 +345,51 @@ function repFilterOptions(selected) {
     ...getReps().sort((a, b) => a.nome.localeCompare(b.nome))
       .map(r => `<option value="${r.id}" ${selected === r.id ? 'selected' : ''}>${esc(r.nome)}</option>`)].join('');
 }
+function estadoFilterOptions(selected) {
+  const estados = [...new Set(getClients().map(c => c.estado).filter(Boolean))].sort();
+  return ['<option value="">Todos os estados</option>',
+    ...estados.map(uf => `<option value="${esc(uf)}" ${selected === uf ? 'selected' : ''}>${esc(uf)}</option>`)].join('');
+}
+
+// Classifica o lojista pro dashboard: Em dia (≥80%), Atenção (50–79%), Risco (<50%)
+function metaStatusInfo(prog) {
+  if (!prog.temMeta) return { label: 'Sem meta', cls: 'none', bucket: 'sem-meta' };
+  if (prog.pct >= 80) return { label: 'Em dia', cls: 'ok', bucket: 'em-dia' };
+  if (prog.pct >= 50) return { label: 'Atenção', cls: 'warn', bucket: 'atencao' };
+  return { label: 'Risco', cls: 'bad', bucket: 'risco' };
+}
+
+function pedidosDoCnpjMaster(cnpj) {
+  const d = onlyDigits(cnpj);
+  return getOrders().filter(o => o.status !== 'cancelled' && onlyDigits(o.buyer && o.buyer.cnpj) === d);
+}
+function ticketMedioCnpj(cnpj) {
+  const pedidos = pedidosDoCnpjMaster(cnpj);
+  return pedidos.length ? pedidos.reduce((s, o) => s + (o.totalValue || 0), 0) / pedidos.length : 0;
+}
+function ultimoPedidoCnpj(cnpj) {
+  const pedidos = pedidosDoCnpjMaster(cnpj).sort((a, b) => new Date(b.date) - new Date(a.date));
+  return pedidos.length ? pedidos[0].date : null;
+}
+
+// Donut genérico via SVG (stroke-dasharray por segmento)
+function donutSvg(segments, size = 108, thickness = 14) {
+  const r = (size - thickness) / 2;
+  const c = 2 * Math.PI * r;
+  const total = segments.reduce((s, x) => s + x.value, 0) || 1;
+  let offset = 0;
+  const rings = segments.filter(s => s.value > 0).map(seg => {
+    const len = (seg.value / total) * c;
+    const dash = `${len} ${c - len}`;
+    const rot = (offset / total) * 360 - 90;
+    offset += seg.value;
+    return `<circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${seg.color}" stroke-width="${thickness}" stroke-dasharray="${dash}" transform="rotate(${rot} ${size/2} ${size/2})"/>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="#EFE8D8" stroke-width="${thickness}"/>
+    ${rings}
+  </svg>`;
+}
 
 function renderMetas() {
   if (!getClients().length) {
@@ -349,21 +398,25 @@ function renderMetas() {
   return `
     <div class="section-header">
       <h2>Metas &amp; Progresso · ${esc(colecaoAtiva())}</h2>
-      <span class="hint">Edite a meta e confirme no ✓ para salvar.</span>
+      <span class="hint">Acompanhe as metas dos lojistas e o progresso da coleção em tempo real.</span>
     </div>
-    <div class="kpi-grid" id="metas-kpis">${metasKpisHTML()}</div>
     <div class="toolbar">
       <input type="search" id="metas-q" placeholder="Buscar por razão social ou CNPJ..."
-        value="${esc(fMetas.q)}" oninput="fMetas.q=this.value; metasRows()">
-      <select id="metas-rep" onchange="fMetas.rep=this.value; metasRows()">${repFilterOptions(fMetas.rep)}</select>
+        value="${esc(fMetas.q)}" oninput="fMetas.q=this.value; metasPage=1; metasRefresh()">
+      <select id="metas-rep" onchange="fMetas.rep=this.value; metasPage=1; metasRefresh()">${repFilterOptions(fMetas.rep)}</select>
+      <select id="metas-estado" onchange="fMetas.estado=this.value; metasPage=1; metasRefresh()">${estadoFilterOptions(fMetas.estado)}</select>
+      <button class="btn btn-outline btn-sm" onclick="exportarMetasCSV()">⬇ Exportar CSV</button>
     </div>
+    <div id="metas-kpis-wrap">${metasKpisHTML()}</div>
+    <div id="metas-panels-wrap">${metasPanelsHTML()}</div>
     <div id="metas-note" class="list-note">${metasNote()}</div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Lojista</th><th>Representante</th><th>Meta (R$)</th><th class="meta-cell">Progresso</th><th>Status</th></tr></thead>
+        <thead><tr><th>#</th><th>Lojista</th><th>Representante</th><th>Meta (R$)</th><th class="meta-cell">Progresso</th><th>Faltam (R$)</th><th>Ticket médio</th><th>Último pedido</th><th>Status</th><th>Acesso</th></tr></thead>
         <tbody id="metas-tbody">${metasRowsHTML()}</tbody>
       </table>
-    </div>`;
+    </div>
+    <div id="metas-pagination">${metasPaginationHTML()}</div>`;
 }
 
 function metasKpisHTML() {
@@ -371,21 +424,111 @@ function metasKpisHTML() {
   const comMeta = list.filter(c => c.progresso.temMeta);
   const metaTotal = comMeta.reduce((s, c) => s + c.progresso.valorMeta, 0);
   const vendidoTotal = comMeta.reduce((s, c) => s + c.progresso.vendido, 0);
+  const faltam = Math.max(0, metaTotal - vendidoTotal);
   const pctMedio = metaTotal > 0 ? Math.round(vendidoTotal / metaTotal * 1000) / 10 : 0;
-  const emAtencao = comMeta.filter(c => c.progresso.pct < 50).length;
   return `
-    <div class="kpi"><div class="label">Lojistas na lista</div><div class="value">${list.length}</div><div class="sub">${list.length - comMeta.length} sem meta</div></div>
-    <div class="kpi"><div class="label">Meta total</div><div class="value gold">${fmt(metaTotal)}</div></div>
-    <div class="kpi"><div class="label">% médio atingido</div><div class="value gold">${pctMedio}%</div></div>
-    <div class="kpi"><div class="label">Em atenção (&lt;50%)</div><div class="value" style="color:var(--danger)">${emAtencao}</div><div class="sub">de ${comMeta.length} com meta</div></div>`;
+    <div class="kpi-grid">
+      <div class="kpi"><div class="label">🏪 Lojistas na lista</div><div class="value">${list.length}</div><div class="sub">${list.length - comMeta.length} sem meta</div></div>
+      <div class="kpi"><div class="label">🎯 Meta total</div><div class="value gold">${fmt(metaTotal)}</div></div>
+      <div class="kpi"><div class="label">📈 Progresso total</div><div class="value">${fmt(vendidoTotal)}</div><div class="sub">${pctMedio}% da meta</div></div>
+      <div class="kpi"><div class="label">⏳ Faltam para a meta</div><div class="value" style="color:#a06f14">${fmt(faltam)}</div></div>
+      <div class="kpi"><div class="label">✓ % de atingimento</div><div class="value gold">${pctMedio}%</div></div>
+    </div>`;
+}
+
+function metasPanelsHTML() {
+  const list = filtrarClientes(fMetas);
+  const comMeta = list.filter(c => c.progresso.temMeta);
+  const metaTotal = comMeta.reduce((s, c) => s + c.progresso.valorMeta, 0);
+  const vendidoTotal = comMeta.reduce((s, c) => s + c.progresso.vendido, 0);
+  const pctMedio = metaTotal > 0 ? Math.round(vendidoTotal / metaTotal * 1000) / 10 : 0;
+
+  // Comparativo com histórico real da coleção anterior (Verão 26), quando existir
+  const histVer26 = list.reduce((s, c) => s + (c.hist_ver26 || 0), 0);
+  const cresc = histVer26 > 0 ? Math.round((metaTotal - histVer26) / histVer26 * 1000) / 10 : null;
+
+  const buckets = { 'em-dia': [], 'atencao': [], 'risco': [] };
+  comMeta.forEach(c => { const b = metaStatusInfo(c.progresso).bucket; if (buckets[b]) buckets[b].push(c); });
+
+  const top5 = [...comMeta].sort((a, b) => b.progresso.vendido - a.progresso.vendido).slice(0, 5);
+
+  const porRegiao = {};
+  list.forEach(c => {
+    const uf = c.estado || 'Não informado';
+    porRegiao[uf] = porRegiao[uf] || { vendido: 0, count: 0 };
+    porRegiao[uf].vendido += c.progresso.vendido;
+    porRegiao[uf].count++;
+  });
+  const regioes = Object.entries(porRegiao).sort((a, b) => b[1].vendido - a[1].vendido).slice(0, 6);
+  const maxRegiao = Math.max(...regioes.map(([, v]) => v.vendido), 1);
+
+  return `
+    <div class="metas-panels">
+      <div class="metas-panel">
+        <h4>Progresso Geral</h4>
+        <div class="donut-wrap">
+          ${donutSvg([{ value: vendidoTotal, color: 'var(--gold, #C9A84C)' }, { value: Math.max(0, metaTotal - vendidoTotal), color: '#EFE8D8' }])}
+          <div class="donut-center"><strong>${pctMedio}%</strong><span>Atingido</span></div>
+        </div>
+        <div class="donut-figs">
+          <div><span>${fmt(vendidoTotal)}</span><small>Atingido</small></div>
+          <div style="text-align:right"><span>${fmt(metaTotal)}</span><small>Meta total</small></div>
+        </div>
+        ${cresc !== null ? `<div class="donut-compare ${cresc >= 0 ? 'up' : 'down'}">${cresc >= 0 ? '↑' : '↓'} ${cresc >= 0 ? '+' : ''}${cresc}% vs Verão 26</div>` : ''}
+      </div>
+
+      <div class="metas-panel">
+        <h4>Distribuição por Status</h4>
+        <div class="donut-wrap">
+          ${donutSvg([
+            { value: buckets['em-dia'].length, color: 'var(--success)' },
+            { value: buckets['atencao'].length, color: '#d9a441' },
+            { value: buckets['risco'].length, color: 'var(--danger)' },
+          ])}
+        </div>
+        <div class="status-legend">
+          <div><span class="dot" style="background:var(--success)"></span>Em dia (≥ 80%)<strong>${buckets['em-dia'].length}</strong></div>
+          <div><span class="dot" style="background:#d9a441"></span>Atenção (50–79%)<strong>${buckets['atencao'].length}</strong></div>
+          <div><span class="dot" style="background:var(--danger)"></span>Risco (&lt; 50%)<strong>${buckets['risco'].length}</strong></div>
+        </div>
+        <button class="btn-link" onclick="fMetas.bucket='risco'; metasPage=1; metasRefresh()">Ver lojistas em risco</button>
+      </div>
+
+      <div class="metas-panel">
+        <h4>Top 5 Maiores Progressos (R$)</h4>
+        ${top5.length ? `<ol class="top5-list">
+          ${top5.map(c => `<li><span class="top5-rank">${c.progresso.pct}%</span><span class="top5-name">${esc(c.razao_social)}</span><strong>${fmt(c.progresso.vendido)}</strong></li>`).join('')}
+        </ol>` : `<p class="muted" style="font-size:.82rem">Nenhum lojista com meta ainda.</p>`}
+        <button class="btn-link" onclick="switchTab('overview')">Ver ranking completo</button>
+      </div>
+
+      <div class="metas-panel">
+        <h4>Desempenho por Região</h4>
+        ${regioes.length ? `<div class="regiao-list">
+          ${regioes.map(([uf, v]) => `
+            <div class="regiao-row">
+              <span class="regiao-uf">${esc(uf)}</span>
+              <div class="regiao-bar"><div class="regiao-bar-fill" style="width:${Math.round(v.vendido / maxRegiao * 100)}%"></div></div>
+              <span class="regiao-val">${fmt(v.vendido)}</span>
+            </div>`).join('')}
+        </div>` : `<p class="muted" style="font-size:.82rem">Sem dados de região ainda.</p>`}
+      </div>
+    </div>`;
 }
 
 function metasRowsHTML() {
-  const list = filtrarClientes(fMetas).slice(0, ROW_CAP);
-  return list.map(c => `
+  const full = filtrarClientes(fMetas);
+  const start = (metasPage - 1) * metasPerPage;
+  const list = full.slice(start, start + metasPerPage);
+  return list.map((c, i) => {
+    const st = metaStatusInfo(c.progresso);
+    const ultimo = ultimoPedidoCnpj(c.cnpj);
+    const ticket = ticketMedioCnpj(c.cnpj);
+    return `
     <tr class="${c.ativo ? '' : 'inactive-row'}">
+      <td><span class="rank-badge">${start + i + 1}</span></td>
       <td>${esc(c.razao_social)}<br><span class="muted" style="font-size:.76rem">${fmtCnpj(c.cnpj)}</span></td>
-      <td>${c.rep ? esc(c.rep.nome) : '<span class="muted">—</span>'}</td>
+      <td>${c.rep ? esc(c.rep.nome) : '<span class="muted">—</span>'}${c.estado ? `<br><span class="muted" style="font-size:.74rem">${esc(c.estado)}</span>` : ''}</td>
       <td style="white-space:nowrap">
         <div class="meta-edit">
           <input type="number" class="meta-input" id="meta-${c.id}" min="0" step="500"
@@ -395,23 +538,85 @@ function metasRowsHTML() {
         </div>
       </td>
       <td>${progressBar(c.progresso)}</td>
-      <td>${statusPill(c.progresso)}</td>
-    </tr>`).join('');
+      <td>${c.progresso.temMeta ? fmt(c.progresso.restante) : '<span class="muted">—</span>'}</td>
+      <td>${ticket > 0 ? fmt(ticket) : '<span class="muted">—</span>'}</td>
+      <td>${ultimo ? fmtRelative(ultimo) : '<span class="muted">—</span>'}</td>
+      <td><span class="pill ${st.cls}">${st.label}</span></td>
+      <td><button class="btn btn-sm btn-outline" onclick="copiarLinkLojista('${c.cnpj}','${esc(c.razao_social).replace(/'/g, "\\'")}')" title="Copiar mensagem de acesso pronta pro WhatsApp">💬</button></td>
+    </tr>`;
+  }).join('');
 }
 
 function metasNote() {
   const total = filtrarClientes(fMetas).length;
-  if (total > ROW_CAP) return `Mostrando ${ROW_CAP} de ${total}. Use a busca ou filtre por representante para ver o restante.`;
-  return `${total} lojista(s).`;
+  return `${total} lojista(s) encontrado(s).`;
 }
 
-function metasRows() {
+function metasPaginationHTML() {
+  const total = filtrarClientes(fMetas).length;
+  const pages = Math.max(1, Math.ceil(total / metasPerPage));
+  if (metasPage > pages) metasPage = pages;
+  const start = total ? (metasPage - 1) * metasPerPage + 1 : 0;
+  const end = Math.min(total, metasPage * metasPerPage);
+
+  const nums = [];
+  for (let p = 1; p <= pages; p++) {
+    if (p === 1 || p === pages || Math.abs(p - metasPage) <= 1) nums.push(p);
+    else if (nums[nums.length - 1] !== '…') nums.push('…');
+  }
+
+  return `
+    <div class="pagination">
+      <span class="pagination-info">Mostrando ${start} a ${end} de ${total} lojista(s)</span>
+      <div class="pagination-controls">
+        <button class="page-btn" ${metasPage <= 1 ? 'disabled' : ''} onclick="metasGoPage(${metasPage - 1})">‹</button>
+        ${nums.map(p => p === '…'
+          ? `<span class="page-ellipsis">…</span>`
+          : `<button class="page-btn ${p === metasPage ? 'active' : ''}" onclick="metasGoPage(${p})">${p}</button>`).join('')}
+        <button class="page-btn" ${metasPage >= pages ? 'disabled' : ''} onclick="metasGoPage(${metasPage + 1})">›</button>
+      </div>
+      <select class="page-size" onchange="metasPerPage=parseInt(this.value); metasPage=1; metasRefresh()">
+        ${[10, 25, 50].map(n => `<option value="${n}" ${metasPerPage === n ? 'selected' : ''}>${n} por página</option>`).join('')}
+      </select>
+    </div>`;
+}
+
+function metasGoPage(p) { metasPage = p; metasRefresh(); }
+
+function metasRefresh() {
+  const kpis = document.getElementById('metas-kpis-wrap');
+  if (kpis) kpis.innerHTML = metasKpisHTML();
+  const panels = document.getElementById('metas-panels-wrap');
+  if (panels) panels.innerHTML = metasPanelsHTML();
   const tb = document.getElementById('metas-tbody');
   if (tb) tb.innerHTML = metasRowsHTML();
   const note = document.getElementById('metas-note');
   if (note) note.textContent = metasNote();
-  const kpis = document.getElementById('metas-kpis');
-  if (kpis) kpis.innerHTML = metasKpisHTML();
+  const pag = document.getElementById('metas-pagination');
+  if (pag) pag.innerHTML = metasPaginationHTML();
+}
+
+function exportarMetasCSV() {
+  const list = filtrarClientes(fMetas);
+  const linhas = [['Lojista', 'CNPJ', 'Representante', 'Estado', 'Meta (R$)', 'Vendido (R$)', '% Atingido', 'Faltam (R$)', 'Status'].join(';')];
+  list.forEach(c => {
+    const st = metaStatusInfo(c.progresso);
+    linhas.push([
+      c.razao_social, fmtCnpj(c.cnpj), c.rep ? c.rep.nome : '', c.estado || '',
+      c.progresso.valorMeta.toFixed(2).replace('.', ','),
+      c.progresso.vendido.toFixed(2).replace('.', ','),
+      c.progresso.pct + '%',
+      c.progresso.restante.toFixed(2).replace('.', ','),
+      st.label,
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(';'));
+  });
+  const blob = new Blob(['﻿' + linhas.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `metas-${colecaoAtiva().replace(/\s+/g, '-').toLowerCase()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('CSV exportado!', 'success');
 }
 
 function salvarMeta(clienteId) {
@@ -419,7 +624,7 @@ function salvarMeta(clienteId) {
   if (isNaN(val) || val < 0) { toast('Informe um valor de meta válido.', 'error'); return; }
   if (val === 0) { deleteMeta(clienteId); toast('Meta removida.', 'info'); }
   else { setMeta(clienteId, val); toast('Meta salva!', 'success'); }
-  metasRows();
+  metasRefresh();
 }
 
 // ── MASTER: Lojistas (CRUD) ───────────────────────────────
