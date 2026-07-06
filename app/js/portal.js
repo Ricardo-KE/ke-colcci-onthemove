@@ -1115,6 +1115,42 @@ function enviarMensagemSelecionados() {
   copiarMensagensEmLote(clientes);
 }
 
+let carteiraPeriodo = 'semana';
+function trocarPeriodoCarteira(p) {
+  carteiraPeriodo = p;
+  document.querySelectorAll('#carteira-period-toggle .ptg-btn').forEach(b => b.classList.toggle('active', b.dataset.p === p));
+  const wrap = document.getElementById('carteira-tendencia-wrap');
+  if (wrap) wrap.innerHTML = renderCarteiraTendenciaChart();
+}
+function renderCarteiraTendenciaChart() {
+  const meusCnpjs = new Set(clientesComProgresso(session.id).map(c => onlyDigits(c.cnpj)));
+  const buckets = vendasPorPeriodo(carteiraPeriodo, 12, meusCnpjs);
+  if (!buckets.length) {
+    return `<div class="empty-chart"><div class="ic">📈</div>
+      <p>Sem pedidos suficientes pra desenhar a evolução ainda.</p></div>`;
+  }
+  const W = 480, H = 170, padL = 8, padR = 8, padB = 24, padT = 14;
+  const max = Math.max(...buckets.map(b => b.total), 1);
+  const bw = (W - padL - padR) / buckets.length;
+  const bars = buckets.map((b, i) => {
+    const h = Math.max(2, (b.total / max) * (H - padT - padB));
+    const x = padL + i * bw + bw * 0.15;
+    const w = bw * 0.7;
+    const y = H - padB - h;
+    const isLast = i === buckets.length - 1;
+    return `
+      <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="3"
+        fill="${isLast ? 'var(--gold)' : '#E8D5A3'}"></rect>
+      <text x="${(x + w / 2).toFixed(1)}" y="${H - 6}" text-anchor="middle" font-size="9" fill="var(--mid)">${esc(b.label)}</text>
+      ${isLast ? `<text x="${(x + w / 2).toFixed(1)}" y="${(y - 5).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="700" fill="var(--dark)">${fmt(b.total)}</text>` : ''}
+    `;
+  }).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">
+      <line x1="${padL}" y1="${H-padB}" x2="${W-padR}" y2="${H-padB}" stroke="#EDE7D8"></line>
+      ${bars}
+    </svg>`;
+}
+
 function renderCarteira() {
   const todos = clientesComProgresso(session.id).sort((a, b) => a.razao_social.localeCompare(b.razao_social));
   const metaTotal = todos.reduce((s, c) => s + c.progresso.valorMeta, 0);
@@ -1128,7 +1164,18 @@ function renderCarteira() {
   const meusCnpjs = todos.map(c => onlyDigits(c.cnpj));
   const carrinhosAtivos = meusCnpjs.map(d => ({ cnpj: d, cart: carts[d] })).filter(x => x.cart && x.cart.totalValue > 0);
   const valorEmCarrinho = carrinhosAtivos.reduce((s, x) => s + x.cart.totalValue, 0);
-  const ativos7d = meusCnpjs.filter(d => access[d] && (Date.now() - new Date(access[d]).getTime()) / 86400000 <= 7).length;
+  const diasDesdeAcesso = (d) => access[d] ? (Date.now() - new Date(access[d]).getTime()) / 86400000 : Infinity;
+  const ativos7d = meusCnpjs.filter(d => diasDesdeAcesso(d) <= 7).length;
+  const inativos30 = meusCnpjs.filter(d => diasDesdeAcesso(d) > 7 && diasDesdeAcesso(d) <= 30).length;
+  const inativosMais30 = meusCnpjs.filter(d => diasDesdeAcesso(d) > 30).length;
+
+  const porRegiao = {};
+  todos.forEach(c => {
+    const uf = c.estado || 'Não informado';
+    porRegiao[uf] = (porRegiao[uf] || 0) + c.progresso.vendido;
+  });
+  const topRegioes = Object.entries(porRegiao).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const maxRegiao = Math.max(...topRegioes.map(([, v]) => v), 1);
 
   // ── Oportunidades quentes: carrinho abandonado (ordenado por valor) +
   //    acesso recente sem nada no carrinho (navegou mas não comprou) ──
@@ -1151,12 +1198,35 @@ function renderCarteira() {
   return `
     <div class="section-header"><h2>Minha Carteira · ${esc(colecaoAtiva())}</h2></div>
     <div class="kpi-grid">
-      <div class="kpi"><div class="label">Meus lojistas</div><div class="value">${todos.length}</div></div>
-      <div class="kpi"><div class="label">Meta total</div><div class="value gold">${fmt(metaTotal)}</div></div>
-      <div class="kpi"><div class="label">Vendido</div><div class="value">${fmt(vendidoTotal)}</div></div>
-      <div class="kpi"><div class="label">% atingido</div><div class="value gold">${pct}%</div></div>
-      <div class="kpi"><div class="label">Em carrinho</div><div class="value" style="color:#b9760a">${fmt(valorEmCarrinho)}</div><div class="sub">${carrinhosAtivos.length} lojista${carrinhosAtivos.length === 1 ? '' : 's'}</div></div>
-      <div class="kpi"><div class="label">Ativos (7 dias)</div><div class="value" style="color:var(--success)">${ativos7d}/${todos.length}</div></div>
+      <div class="kpi"><div class="label">🏪 Meus lojistas</div><div class="value">${todos.length}</div></div>
+      <div class="kpi"><div class="label">🎯 Meta total</div><div class="value gold">${fmt(metaTotal)}</div></div>
+      <div class="kpi"><div class="label">💰 Vendido</div><div class="value">${fmt(vendidoTotal)}</div></div>
+      <div class="kpi"><div class="label">✓ % atingido</div><div class="value gold">${pct}%</div></div>
+      <div class="kpi"><div class="label">🛒 Em carrinho</div><div class="value" style="color:#b9760a">${fmt(valorEmCarrinho)}</div><div class="sub">${carrinhosAtivos.length} lojista${carrinhosAtivos.length === 1 ? '' : 's'}</div></div>
+      <div class="kpi"><div class="label">🟢 Ativos (7 dias)</div><div class="value" style="color:var(--success)">${ativos7d}/${todos.length}</div></div>
+    </div>
+
+    <div class="metas-panels" style="grid-template-columns:minmax(220px,1fr) minmax(280px,2fr)">
+      <div class="metas-panel">
+        <h4>Desempenho da Carteira</h4>
+        <div class="donut-wrap">
+          ${donutSvg([{ value: vendidoTotal, color: 'var(--gold, #C9A84C)' }, { value: Math.max(0, metaTotal - vendidoTotal), color: '#EFE8D8' }])}
+          <div class="donut-center"><strong>${pct}%</strong><span>Atingido</span></div>
+        </div>
+        <div class="donut-figs">
+          <div><span>${fmt(vendidoTotal)}</span><small>Vendido</small></div>
+          <div style="text-align:right"><span>${fmt(metaTotal)}</span><small>Meta</small></div>
+        </div>
+      </div>
+      <div class="metas-panel">
+        <div class="section-header" style="margin-bottom:6px">
+          <h4 style="margin-bottom:0">Evolução de Vendas</h4>
+          <div class="period-toggle" id="carteira-period-toggle">
+            ${['semana', 'quinzena', 'mes'].map(p => `<button class="ptg-btn${p === carteiraPeriodo ? ' active' : ''}" data-p="${p}" onclick="trocarPeriodoCarteira('${p}')">${{semana:'Semana', quinzena:'Quinzena', mes:'Mês'}[p]}</button>`).join('')}
+          </div>
+        </div>
+        <div id="carteira-tendencia-wrap">${renderCarteiraTendenciaChart()}</div>
+      </div>
     </div>
 
     <div class="section-header">
@@ -1214,6 +1284,35 @@ function renderCarteira() {
         </tbody>
       </table>
     </div>` : `<div class="empty-block" style="padding:30px;margin-bottom:26px"><div class="icon" style="font-size:2rem">📦</div><p>Nenhum pedido da sua carteira ainda.</p></div>`}
+
+    <div class="metas-panels">
+      <div class="metas-panel">
+        <h4>Distribuição dos Lojistas</h4>
+        <div class="donut-wrap">
+          ${donutSvg([
+            { value: ativos7d, color: 'var(--success)' },
+            { value: inativos30, color: '#d9a441' },
+            { value: inativosMais30, color: 'var(--danger)' },
+          ])}
+        </div>
+        <div class="status-legend">
+          <div><span class="dot" style="background:var(--success)"></span>Ativos (7 dias)<strong>${ativos7d}</strong></div>
+          <div><span class="dot" style="background:#d9a441"></span>Inativos (7–30 dias)<strong>${inativos30}</strong></div>
+          <div><span class="dot" style="background:var(--danger)"></span>Inativos (&gt;30 dias)<strong>${inativosMais30}</strong></div>
+        </div>
+      </div>
+      <div class="metas-panel">
+        <h4>Top Regiões (Vendido)</h4>
+        ${topRegioes.length ? `<div class="regiao-list">
+          ${topRegioes.map(([uf, v], i) => `
+            <div class="regiao-row">
+              <span class="regiao-uf">${i + 1}. ${esc(uf)}</span>
+              <div class="regiao-bar"><div class="regiao-bar-fill" style="width:${Math.round(v / maxRegiao * 100)}%"></div></div>
+              <span class="regiao-val">${fmt(v)}</span>
+            </div>`).join('')}
+        </div>` : `<p class="muted" style="font-size:.82rem">Sem dados de região ainda.</p>`}
+      </div>
+    </div>
 
     ${todos.length ? `
     <div class="section-header">

@@ -142,8 +142,9 @@ function carteiraPorRepresentante() {
 }
 
 // Soma de vendas por período: 'semana' | 'quinzena' | 'mes', mais recentes primeiro
-function vendasPorPeriodo(periodo, limite = 12) {
-  const orders = getOrders().filter(o => o.status !== 'cancelled' && o.date);
+function vendasPorPeriodo(periodo, limite = 12, cnpjs = null) {
+  let orders = getOrders().filter(o => o.status !== 'cancelled' && o.date);
+  if (cnpjs) orders = orders.filter(o => cnpjs.has(onlyDigits(o.buyer && o.buyer.cnpj)));
   const passoMs = { semana: 7, quinzena: 14 }[periodo] * 24 * 3600 * 1000;
   const buckets = new Map();
   orders.forEach(o => {
