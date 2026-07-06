@@ -28,11 +28,53 @@ function saveSettings(data) {
 }
 
 // ── Products ──────────────────────────────────────────────
-const CATALOG_VERSION = 'colcci-onthemove-v2';
+const CATALOG_VERSION = 'colcci-onthemove-v3';
 
-// Preço sugerido de VAREJO (PDV) por SKU. Preencher quando o catálogo
-// oficial do Colcci On The Move chegar (mesmo padrão do projeto Verão 27).
-const RETAIL_PRICES = {};
+// Preço sugerido de VAREJO (PDV) por SKU — do catálogo oficial
+// "CATÁLOGO OTM PDV - VERÃO 27" (mesmo padrão do projeto Verão 27).
+const RETAIL_PRICES = {
+  '090.01.12562': 279.00,  // Bolsa Colcci Beach Bag On The Move
+  '130.01.00003': 179.00,  // Toalha Colcci Stripes On The Move
+  '090.01.12563': 229.00,  // Bolsa Colcci Shop Mesh On The Move
+  '825.01.00010': 129.00,  // Necessaire Colcci Mesh On The Move
+  '090.01.12567': 279.00,  // Cooler Colcci On The Move
+  '083.01.00176': 369.00,  // Bolsa Colcci Fem Bucket On The Move
+  '602.01.00001': 179.00,  // Copo Térmico Colcci 591ml com Canudo
+  '083.01.00175': 229.00,  // Bolsa Colcci Fem Crossbody On The Move
+  '826.01.00002': 139.00,  // Traveseiro Colcci On The Move
+  '083.01.00163': 399.00,  // Bolsa Colcci Fem Weekend Bag
+  '090.01.12570': 249.00,  // Bolsa Colcci Fem Crossbody On The Move
+  '117.01.00020': 369.00,  // Mochila Colcci Basic On The Move
+  '090.01.12568': 349.00,  // Bolsa Colcci Shop Puffer On The Move
+  '825.01.00012': 139.00,  // Necessaire Colcci Puffer Plus On The Move
+  '045.01.00014': 89.00,   // Chaveiro Colcci Digby On The Move
+  '045.01.00015': 89.00,   // Chaveiro Colcci Scarf On The Move
+  '045.01.00017': 89.00,   // Chaveiro Colcci Ted On The Move
+  '045.01.00018': 89.00,   // Chaveiro Colcci Mirror On The Move
+  '117.01.00019': 199.00,  // Mochila Colcci Bucket On The Move
+  '083.01.00162': 179.00,  // Bolsa Festival
+  '083.01.00155': 89.00,   // Bolsa Dobrável Colcci Nylon
+  '824.01.00002': 199.00,  // Garrafa Colcci 750ml
+  '825.01.00005': 119.00,  // Necessaire Colcci Essence On The Move
+  '083.01.00177': 399.00,  // Bolsa Colcci Fem Weekend On The Move
+  '602.01.00003': 179.00,  // Copo Térmico Colcci 887ml On The Move
+  '090.01.12569': 219.00,  // Bolsa Colcci Cross Franzida On The Move
+  '083.01.00160': 189.00,  // Bolsa Colcci Fem Crossbody On The Move
+  '083.01.00164': 319.00,  // Bolsa Colcci Fem Shop Bag On The Move
+  '602.01.00002': 149.00,  // Copo Térmico Colcci 550ml On The Move
+  '825.01.00003': 129.00,  // Necessaire Colcci Plus On The Move
+  '083.01.00170': 329.00,  // Bolsa Colcci Fem Hobo On The Move
+  '083.01.00171': 329.00,  // Bolsa Colcci Fem Shop Bag Dupla Face
+  '824.01.00001': 179.00,  // Garrafa Colcci 500ml
+  '092.01.60456': 459.00,  // Mochila Colcci Nylon On The Move
+  '825.01.00006': 139.00,  // Necessaire Colcci Box On The Move
+  '083.01.00172': 319.00,  // Bolsa Colcci Fem Shop Bag Mesh On The Move
+  '092.01.60454': 359.00,  // Mochila Colcci Bucket On The Move
+  '083.01.00179': 189.00,  // Bolsa Colcci Fem Festival On The Move
+  '825.01.00011': 129.00,  // Necessaire Colcci Puffer On The Move
+  // 045.01.00016 (Chaveiro Headphone Case) está no PDV mas não existe
+  // ainda no catálogo do site — sem foto/dados de estoque cadastrados.
+};
 
 // Ranking de vendas — preencher com dados reais quando houver histórico
 // de vendas desta linha (rank = posição por quantidade vendida).
