@@ -110,6 +110,26 @@ export default async (req) => {
     return j({ ok: true });
   }
 
+  // Avaliar pedido: só o próprio lojista dono do pedido (comparando CNPJ)
+  if (req.method === 'POST' && key === 'orders' && action === 'rate') {
+    const p = verify(bearer(req));
+    if (!p || p.role !== 'lojista') return j({ error: 'não autorizado' }, 401);
+    const b = await req.json().catch(() => null);
+    if (!b || !b.id || !b.rating) return j({ error: 'bad body' }, 400);
+    const ent = await getDoc('entities');
+    const cli = (ent.clientes || []).find(c => c.id === p.id);
+    if (!cli) return j({ error: 'não autorizado' }, 403);
+    const list = await getDoc('orders');
+    const order = list.find(o => o.id === b.id);
+    if (!order) return j({ error: 'pedido não encontrado' }, 404);
+    if (onlyd(order.buyer && order.buyer.cnpj) !== onlyd(cli.cnpj)) return j({ error: 'não autorizado' }, 403);
+    const rating = Math.min(5, Math.max(1, Number(b.rating) || 0));
+    await store().setJSON('orders', list.map(o => o.id === b.id
+      ? { ...o, rating, comment: String(b.comment || '').slice(0, 500), ratedAt: new Date().toISOString() }
+      : o));
+    return j({ ok: true });
+  }
+
   // ── Daqui pra baixo: só master ─────────────────────────
   const p = verify(bearer(req));
   if (!p || p.role !== 'master') return j({ error: 'não autorizado' }, 401);

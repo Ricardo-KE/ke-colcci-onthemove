@@ -158,6 +158,14 @@ async function clearCartSnapshot(cnpj) {
   } catch (e) { /* silencioso */ }
 }
 
+// ── Avaliar pedido (lojista) ──────────────────────────────
+async function pushOrderRating(id, rating, comment) {
+  await _fetch(`${API}/api/store?key=orders&action=rate`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ id, rating, comment }),
+  });
+}
+
 // orders (master): leitura completa, usada pelo admin
 async function pullOrders() {
   try {

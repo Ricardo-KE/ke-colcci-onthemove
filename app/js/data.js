@@ -143,6 +143,11 @@ function updateOrderStatus(id, status) {
   saveOrders(getOrders().map(o => o.id === id ? { ...o, status } : o));
   if (typeof pushOrderStatus === 'function') pushOrderStatus(id, status);
 }
+function rateOrder(id, rating, comment) {
+  const ratedAt = new Date().toISOString();
+  saveOrders(getOrders().map(o => o.id === id ? { ...o, rating, comment: comment || '', ratedAt } : o));
+  if (typeof pushOrderRating === 'function') pushOrderRating(id, rating, comment);
+}
 
 // ── Rastreamento (acesso ao catálogo + carrinho em andamento) ─
 // Preenchidos via /api/me (loadMe), escopados por representante no servidor.

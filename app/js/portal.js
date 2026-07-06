@@ -119,8 +119,9 @@ const TABS = {
   ],
   rep:     [{ id: 'carteira', label: '🎯 Minha Carteira' }],
   lojista: [
-    { id: 'minhameta', label: '🎯 Minha Meta' },
-    { id: 'pedidos',   label: '📋 Meus Dados & Pedidos' },
+    { id: 'minhameta',  label: '🎯 Minha Meta' },
+    { id: 'pedidos',    label: '📋 Meus Dados & Pedidos' },
+    { id: 'sugestoes',  label: '✨ Minhas Sugestões' },
   ],
 };
 
@@ -160,6 +161,7 @@ function switchTab(tab) {
     carteira:  renderCarteira,
     minhameta: renderMinhaMeta,
     pedidos:   renderPedidosLojista,
+    sugestoes: renderSugestoesLojista,
   }[tab];
   c.innerHTML = render ? render() : '';
 }
@@ -953,7 +955,7 @@ function renderCarteira() {
     ${pedidos.length ? `
     <div class="table-wrap" style="margin-bottom:26px">
       <table>
-        <thead><tr><th>Pedido</th><th>Lojista</th><th>Itens</th><th>Total</th><th>Data</th><th>Status</th><th>Ações</th></tr></thead>
+        <thead><tr><th>Pedido</th><th>Lojista</th><th>Itens</th><th>Total</th><th>Data</th><th>Status</th><th>Avaliação</th><th>Ações</th></tr></thead>
         <tbody>
           ${pedidos.map(o => `
             <tr>
@@ -963,6 +965,7 @@ function renderCarteira() {
               <td>${fmt(o.totalValue)}</td>
               <td>${fmtDate(o.date)}</td>
               <td>${statusLabelRep(o.status)}</td>
+              <td>${o.rating ? `<span class="rating-stars filled" title="${o.comment ? esc(o.comment) : ''}">${starsHtml(o.rating)}</span>` : '<span class="muted">—</span>'}</td>
               <td style="white-space:nowrap">
                 ${o.status === 'pending' ? `
                   <button class="btn btn-sm btn-gold" onclick="confirmarPedido('${o.id}','confirmed')">✅ Confirmar</button>
@@ -1132,11 +1135,77 @@ function renderPedidosLojista() {
                 </div>
               </div>`).join('')}
           </div>
+          ${['confirmed', 'shipped'].includes(o.status) ? `<div class="order-rating">${avaliacaoWidget(o)}</div>` : ''}
         </div>`;
       }).join('')}
     </div>
     <p style="font-size:.78rem;color:#999;margin-top:14px">O status é atualizado pelo seu representante assim que o pedido é confirmado.</p>
     ` : `<div class="empty-block"><div class="icon">📦</div><p>Você ainda não fez nenhum pedido.</p><a href="index.html?loja=${onlyDigits(c.cnpj)}" class="btn btn-gold btn-sm" style="margin-top:10px" target="_blank">👜 Ir para o catálogo</a></div>`}`;
+}
+
+// ── Avaliar pedido (lojista) ───────────────────────────────
+function starsHtml(rating) {
+  return Array.from({ length: 5 }, (_, i) => i < rating ? '★' : '☆').join('');
+}
+function avaliacaoWidget(o) {
+  if (o.rating) {
+    return `<span class="rating-label">Sua avaliação:</span> <span class="rating-stars filled">${starsHtml(o.rating)}</span>${o.comment ? `<span class="rating-comment">"${esc(o.comment)}"</span>` : ''}`;
+  }
+  return `<span class="rating-label">Avalie este pedido:</span> ${[1, 2, 3, 4, 5].map(n =>
+    `<button class="rating-star" onclick="avaliarPedido('${o.id}',${n})" title="${n} estrela${n === 1 ? '' : 's'}">☆</button>`
+  ).join('')}`;
+}
+function avaliarPedido(orderId, rating) {
+  const comment = prompt(`Nota ${rating}/5 — quer deixar um comentário? (opcional)`, '') || '';
+  rateOrder(orderId, rating, comment.trim());
+  toast('Obrigado pela avaliação!', 'success');
+  refresh();
+}
+
+// ── LOJISTA: Minhas Sugestões ──────────────────────────────
+function sugestoesParaLojista() {
+  const pedidos = pedidosDoLojista().filter(o => o.status !== 'cancelled');
+  const categoriasCompradas = new Set();
+  const codigosComprados = new Set();
+  pedidos.forEach(o => o.items.forEach(i => {
+    codigosComprados.add(i.productCode);
+    const p = getProducts().find(x => x.id === i.productId);
+    if (p) categoriasCompradas.add(p.category);
+  }));
+  const disponiveis = getProducts().filter(p => p.active && (p.stock || 0) > 0);
+  if (!categoriasCompradas.size) {
+    return disponiveis.filter(p => p.rank).sort((a, b) => a.rank - b.rank).slice(0, 8);
+  }
+  return disponiveis
+    .filter(p => categoriasCompradas.has(p.category) && !codigosComprados.has(p.code))
+    .slice(0, 12);
+}
+function renderSugestoesLojista() {
+  const c = clientById(session.id);
+  const temHistorico = pedidosDoLojista().filter(o => o.status !== 'cancelled').length > 0;
+  const sugestoes = sugestoesParaLojista();
+
+  return `
+    <div class="section-header"><h2>Minhas Sugestões · ${esc(colecaoAtiva())}</h2></div>
+    <p style="font-size:.82rem;color:#999;margin-top:-14px;margin-bottom:22px">
+      ${temHistorico
+        ? 'Com base no que você já comprou — itens das mesmas famílias que ainda não estão no seu pedido.'
+        : 'Você ainda não tem pedidos — aqui vão os campeões de venda da coleção pra começar.'}
+    </p>
+    ${sugestoes.length ? `
+    <div class="sugestoes-grid">
+      ${sugestoes.map(p => `
+        <div class="sugestao-card">
+          <div class="sugestao-img">${(p.colorImages && p.image) ? `<img src="${p.image}" alt="${esc(p.name)}" onerror="this.parentElement.innerHTML='🛍️'">` : '🛍️'}</div>
+          <div class="sugestao-info">
+            <span class="sugestao-name">${esc(p.name)}</span>
+            <span class="sugestao-code">Ref. ${esc(p.code)}</span>
+            ${p.retail ? `<span class="sugestao-price">${fmt(p.retail)} <small>varejo sugerido</small></span>` : `<span class="sugestao-price">${fmt(p.price)}</span>`}
+          </div>
+        </div>`).join('')}
+    </div>
+    <a href="index.html?loja=${onlyDigits(c.cnpj)}" class="btn btn-gold btn-full" style="margin-top:22px" target="_blank">👜 Montar pedido no catálogo</a>
+    ` : `<div class="empty-block"><div class="icon">✨</div><p>Nenhuma sugestão nova por enquanto — você já pediu de tudo que temos pras suas famílias favoritas!</p></div>`}`;
 }
 
 // ── Modal / utils ─────────────────────────────────────────
