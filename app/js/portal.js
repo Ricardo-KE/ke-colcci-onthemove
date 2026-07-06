@@ -1196,7 +1196,7 @@ function renderSugestoesLojista() {
     <div class="sugestoes-grid">
       ${sugestoes.map(p => `
         <div class="sugestao-card">
-          <div class="sugestao-img">${(p.colorImages && p.image) ? `<img src="${p.image}" alt="${esc(p.name)}" onerror="this.parentElement.innerHTML='🛍️'">` : '🛍️'}</div>
+          <div class="sugestao-img">${p.image ? `<img src="${p.image}" alt="${esc(p.name)}" onerror="this.parentElement.innerHTML='🛍️'">` : '🛍️'}</div>
           <div class="sugestao-info">
             <span class="sugestao-name">${esc(p.name)}</span>
             <span class="sugestao-code">Ref. ${esc(p.code)}</span>
