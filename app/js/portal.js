@@ -349,8 +349,9 @@ function renderMetas() {
   return `
     <div class="section-header">
       <h2>Metas &amp; Progresso · ${esc(colecaoAtiva())}</h2>
-      <span class="hint">Edite a meta e clique em 💾 para salvar.</span>
+      <span class="hint">Edite a meta e confirme no ✓ para salvar.</span>
     </div>
+    <div class="kpi-grid" id="metas-kpis">${metasKpisHTML()}</div>
     <div class="toolbar">
       <input type="search" id="metas-q" placeholder="Buscar por razão social ou CNPJ..."
         value="${esc(fMetas.q)}" oninput="fMetas.q=this.value; metasRows()">
@@ -365,6 +366,20 @@ function renderMetas() {
     </div>`;
 }
 
+function metasKpisHTML() {
+  const list = filtrarClientes(fMetas);
+  const comMeta = list.filter(c => c.progresso.temMeta);
+  const metaTotal = comMeta.reduce((s, c) => s + c.progresso.valorMeta, 0);
+  const vendidoTotal = comMeta.reduce((s, c) => s + c.progresso.vendido, 0);
+  const pctMedio = metaTotal > 0 ? Math.round(vendidoTotal / metaTotal * 1000) / 10 : 0;
+  const emAtencao = comMeta.filter(c => c.progresso.pct < 50).length;
+  return `
+    <div class="kpi"><div class="label">Lojistas na lista</div><div class="value">${list.length}</div><div class="sub">${list.length - comMeta.length} sem meta</div></div>
+    <div class="kpi"><div class="label">Meta total</div><div class="value gold">${fmt(metaTotal)}</div></div>
+    <div class="kpi"><div class="label">% médio atingido</div><div class="value gold">${pctMedio}%</div></div>
+    <div class="kpi"><div class="label">Em atenção (&lt;50%)</div><div class="value" style="color:var(--danger)">${emAtencao}</div><div class="sub">de ${comMeta.length} com meta</div></div>`;
+}
+
 function metasRowsHTML() {
   const list = filtrarClientes(fMetas).slice(0, ROW_CAP);
   return list.map(c => `
@@ -372,9 +387,12 @@ function metasRowsHTML() {
       <td>${esc(c.razao_social)}<br><span class="muted" style="font-size:.76rem">${fmtCnpj(c.cnpj)}</span></td>
       <td>${c.rep ? esc(c.rep.nome) : '<span class="muted">—</span>'}</td>
       <td style="white-space:nowrap">
-        <input type="number" class="meta-input" id="meta-${c.id}" min="0" step="500"
-          value="${c.progresso.valorMeta || ''}" placeholder="0">
-        <button class="btn btn-sm btn-gold" onclick="salvarMeta('${c.id}')" title="Salvar meta">💾</button>
+        <div class="meta-edit">
+          <input type="number" class="meta-input" id="meta-${c.id}" min="0" step="500"
+            value="${c.progresso.valorMeta || ''}" placeholder="0"
+            onkeydown="if(event.key==='Enter') salvarMeta('${c.id}')">
+          <button class="meta-save" onclick="salvarMeta('${c.id}')" title="Salvar meta">✓</button>
+        </div>
       </td>
       <td>${progressBar(c.progresso)}</td>
       <td>${statusPill(c.progresso)}</td>
@@ -392,6 +410,8 @@ function metasRows() {
   if (tb) tb.innerHTML = metasRowsHTML();
   const note = document.getElementById('metas-note');
   if (note) note.textContent = metasNote();
+  const kpis = document.getElementById('metas-kpis');
+  if (kpis) kpis.innerHTML = metasKpisHTML();
 }
 
 function salvarMeta(clienteId) {
