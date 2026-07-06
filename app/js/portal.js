@@ -122,7 +122,7 @@ function sair() {
 // ── Shell ─────────────────────────────────────────────────
 const TABS = {
   master: [
-    { id: 'overview', label: '📊 Visão Geral' },
+    { id: 'overview', label: '🎯 Centro de Comando' },
     { id: 'metas',    label: '🎯 Metas & Progresso' },
     { id: 'lojistas', label: '🏪 Lojistas' },
     { id: 'reps',     label: '🧑‍💼 Representantes' },
@@ -217,28 +217,45 @@ function renderOverview() {
   const semMeta = ativos.filter(c => !c.progresso.temMeta).length;
   const reps = getReps().filter(r => r.ativo).length;
 
-  // Comparativo vs Verão 26 (histórico real importado por CNPJ)
+  const pedidosValidos = getOrders().filter(o => o.status !== 'cancelled');
+  const ticketMedio = pedidosValidos.length ? pedidosValidos.reduce((s, o) => s + (o.totalValue || 0), 0) / pedidosValidos.length : 0;
+  const comPedido = ativos.filter(c => c.progresso.vendido > 0).length;
+  const taxaConversao = ativos.length ? Math.round(comPedido / ativos.length * 1000) / 10 : 0;
+
+  // Comparativo vs histórico real importado (LY ou última coleção)
   const histVer26 = ativos.reduce((s, c) => s + (c.hist_ver26 || 0), 0);
   const cresc = histVer26 > 0 ? Math.round((metaTotal - histVer26) / histVer26 * 1000) / 10 : null;
   const metaSub = histVer26 > 0
-    ? `${cresc >= 0 ? '↑' : '↓'} ${cresc >= 0 ? '+' : ''}${cresc}% vs Verão 26 (${fmt(histVer26)})`
-    : 'sem histórico de Verão 26';
+    ? `${cresc >= 0 ? '↑' : '↓'} ${cresc >= 0 ? '+' : ''}${cresc}% vs histórico (${fmt(histVer26)})`
+    : 'sem histórico importado';
 
   const rankingAll = [...ativos].filter(c => c.progresso.temMeta)
     .sort((a, b) => b.progresso.pct - a.progresso.pct);
   const ranking = rankingAll.slice(0, 20);
 
-  const carteiras = carteiraPorRepresentante();
-
   return `
-    <div class="section-header"><h2>Visão Geral · ${esc(colecaoAtiva())}</h2></div>
-    <div class="kpi-grid">
-      <div class="kpi"><div class="label">Lojistas ativos</div><div class="value">${ativos.length}</div><div class="sub">${reps} representantes</div></div>
-      <div class="kpi"><div class="label">Meta total</div><div class="value gold">${fmt(metaTotal)}</div><div class="sub">${metaSub}</div></div>
-      <div class="kpi"><div class="label">Vendido</div><div class="value">${fmt(vendidoTotal)}</div><div class="sub">via pedidos por CNPJ</div></div>
-      <div class="kpi"><div class="label">% atingido</div><div class="value gold">${pctGeral}%</div></div>
-      <div class="kpi"><div class="label">Metas batidas</div><div class="value">${batidas}/${ativos.filter(c=>c.progresso.temMeta).length}</div><div class="sub">${semMeta} sem meta</div></div>
+    <div class="section-header">
+      <h2>🎯 Centro de Comando · ${esc(colecaoAtiva())}</h2>
+      <span class="hint">Operação nacional em tempo real — representantes, regiões, clusters e clientes numa única visão.</span>
     </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div class="label">🏪 Lojistas ativos</div><div class="value">${ativos.length}</div><div class="sub">${reps} representantes</div></div>
+      <div class="kpi"><div class="label">🎯 Meta total</div><div class="value gold">${fmt(metaTotal)}</div><div class="sub">${metaSub}</div></div>
+      <div class="kpi"><div class="label">💰 Faturamento</div><div class="value">${fmt(vendidoTotal)}</div><div class="sub">${pctGeral}% da meta</div></div>
+      <div class="kpi"><div class="label">🧾 Ticket médio</div><div class="value">${fmt(ticketMedio)}</div><div class="sub">${pedidosValidos.length} pedido${pedidosValidos.length === 1 ? '' : 's'}</div></div>
+      <div class="kpi"><div class="label">📈 Taxa de conversão</div><div class="value gold">${taxaConversao}%</div><div class="sub">${comPedido}/${ativos.length} compraram</div></div>
+      <div class="kpi"><div class="label">✓ Metas batidas</div><div class="value">${batidas}/${ativos.filter(c => c.progresso.temMeta).length}</div><div class="sub">${semMeta} sem meta</div></div>
+    </div>
+
+    ${renderCockpitCampanhaGeral()}
+    ${renderFunilComercial()}
+
+    <div class="metas-panels" style="grid-template-columns:minmax(280px,1.4fr) minmax(240px,1fr)">
+      ${renderHeatmapEstados()}
+      ${renderDistribuicaoClusters()}
+    </div>
+
+    ${renderSegmentosClientes()}
 
     <div class="section-header">
       <h2>Tendência de vendas</h2>
@@ -248,22 +265,8 @@ function renderOverview() {
     </div>
     <div class="card chart-card" id="tendencia-wrap">${renderTendenciaChart()}</div>
 
-    <div class="section-header"><h2>Ranking de representantes</h2></div>
-    ${carteiras.length ? `
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>#</th><th>Representante</th><th>Carteira</th><th class="meta-cell">Progresso</th></tr></thead>
-        <tbody>
-          ${carteiras.map((r, i) => `
-            <tr>
-              <td><strong>${i + 1}º</strong></td>
-              <td>${esc(r.rep.nome)}</td>
-              <td>${r.lojistas} lojista${r.lojistas === 1 ? '' : 's'}</td>
-              <td>${progressBar(r.progresso)}</td>
-            </tr>`).join('')}
-        </tbody>
-      </table>
-    </div>` : `<div class="empty-block"><div class="icon">🧑‍💼</div><p>Nenhum representante ativo com carteira ainda.</p></div>`}
+    ${renderRankingRepresentantes()}
+    ${renderAlertasInteligentes()}
 
     <div class="section-header"><h2>Ranking de lojistas (top 20)</h2></div>
     ${ranking.length ? `
@@ -283,6 +286,92 @@ function renderOverview() {
       </table>
     </div>` : `<div class="empty-block"><div class="icon">🎯</div><p>Nenhuma meta cadastrada ainda. Vá em <strong>Metas &amp; Progresso</strong>.</p></div>`}
   `;
+}
+
+// ── Funil Comercial (CRM invisível agregado) ──────────────
+function renderFunilComercial() {
+  const etapas = funilComercial();
+  const max = Math.max(...etapas.map(e => e.valor), 1);
+  return `
+    <div class="section-header"><h2>🔻 Funil Comercial</h2><span class="hint">Da entrada na plataforma até a meta batida</span></div>
+    <div class="funil-wrap">
+      ${etapas.map((e, i) => {
+        const pctWidth = Math.max(6, Math.round(e.valor / max * 100));
+        const pctBase = etapas[0].valor > 0 ? Math.round(e.valor / etapas[0].valor * 1000) / 10 : 0;
+        return `
+        <div class="funil-step">
+          <div class="funil-label"><span>${esc(e.label)}</span><strong>${e.valor}</strong></div>
+          <div class="funil-bar-track"><div class="funil-bar-fill" style="width:${pctWidth}%"></div></div>
+          ${i > 0 ? `<span class="funil-pct">${pctBase}% do total</span>` : ''}
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+// ── Heat map comercial por estado ─────────────────────────
+function renderHeatmapEstados() {
+  const dados = heatmapPorEstado();
+  if (!dados.length) return `<div class="metas-panel"><h4>Heat Map por Estado</h4><div class="empty-block" style="padding:20px"><p>Sem lojistas ativos ainda.</p></div></div>`;
+  const corPct = (p) => p >= 80 ? 'var(--success)' : p >= 50 ? '#d9a441' : 'var(--danger)';
+  return `
+    <div class="metas-panel">
+      <h4>🗺️ Heat Map por Estado</h4>
+      <div class="heatmap-grid">
+        ${dados.map(r => `
+          <div class="heatmap-cell" style="border-color:${corPct(r.pct)}">
+            <div class="heatmap-uf">${esc(r.uf)}</div>
+            <div class="heatmap-pct" style="color:${corPct(r.pct)}">${r.pct}%</div>
+            <div class="heatmap-sub">${r.lojistas} lojista${r.lojistas === 1 ? '' : 's'} · ${fmt(r.vendido)}</div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+}
+
+// ── Distribuição de representantes por cluster ────────────
+function renderDistribuicaoClusters() {
+  const dados = distribuicaoClusters();
+  const corCluster = { A: '#C9A84C', B: '#8FA97A', C: '#6A9BD8' };
+  return `
+    <div class="metas-panel">
+      <h4>🧩 Clusters de Representantes</h4>
+      <div class="cluster-list">
+        ${dados.map(c => `
+          <div class="cluster-row">
+            <span class="cluster-badge" style="background:${corCluster[c.id]}">${c.id}</span>
+            <div class="cluster-info">
+              <span class="cluster-count">${c.count} representante${c.count === 1 ? '' : 's'}</span>
+              <div class="comissao-bar" style="height:7px"><div class="comissao-bar-fill" style="width:${Math.min(100, c.pct)}%;background:${corCluster[c.id]}"></div></div>
+            </div>
+            <span class="cluster-pct">${c.pct}%</span>
+          </div>`).join('')}
+      </div>
+    </div>`;
+}
+
+// ── Segmentos inteligentes de clientes ────────────────────
+function renderSegmentosClientes() {
+  const seg = segmentosClientes();
+  const cards = [
+    { key: 'vip', titulo: '👑 Clientes VIP', desc: 'Maior histórico/volume de compra', lista: seg.vip, cor: 'var(--gold, #C9A84C)' },
+    { key: 'risco', titulo: '⚠️ Clientes em Risco', desc: 'Com meta, abaixo de 50% de atingimento', lista: seg.risco, cor: 'var(--danger)' },
+    { key: 'esquecidos', titulo: '💤 Clientes Esquecidos', desc: 'Sem acessar a plataforma há mais de 30 dias', lista: seg.esquecidos, cor: '#a06f14' },
+    { key: 'semPedido', titulo: '🆕 Sem Pedido na Coleção', desc: 'Ainda não compraram nesta coleção', lista: seg.semPedido, cor: '#6A9BD8' },
+  ];
+  return `
+    <div class="section-header"><h2>🧠 Segmentos Inteligentes de Clientes</h2><span class="hint">Leitura automática sobre acesso, carrinho e histórico de compra</span></div>
+    <div class="segmentos-grid">
+      ${cards.map(c => `
+        <div class="segmento-card" style="border-top-color:${c.cor}">
+          <div class="segmento-head">
+            <span>${c.titulo}</span>
+            <strong style="color:${c.cor}">${c.lista.length}</strong>
+          </div>
+          <div class="segmento-desc">${c.desc}</div>
+          <ul class="segmento-list">
+            ${c.lista.slice(0, 5).map(cl => `<li>${esc(cl.razao_social)}</li>`).join('') || '<li class="muted">Nenhum cliente neste segmento.</li>'}
+          </ul>
+        </div>`).join('')}
+    </div>`;
 }
 
 function trocarPeriodoOverview(p) {
@@ -1115,6 +1204,219 @@ function enviarMensagemSelecionados() {
   copiarMensagensEmLote(clientes);
 }
 
+// ── COCKPIT DA CAMPANHA (compartilhado: rep e master) ─────
+// Todas as datas/valores vêm da POLITICA (data.js), a partir do
+// documento oficial da coleção — nada aqui é estimado.
+function renderCockpitCampanha(meta, vendido) {
+  const hoje = new Date();
+  const inicio = new Date(POLITICA.periodo.inicio);
+  const fim = new Date(POLITICA.periodo.fim);
+  const diasTotais = Math.max(1, diasEntre(inicio, fim));
+  const diasDecorridos = Math.min(diasTotais, Math.max(0, diasEntre(inicio, hoje)));
+  const diasRestantes = Math.max(0, diasTotais - diasDecorridos);
+  const diasUteisRestantes = Math.round(diasRestantes * 5 / 7);
+  const pctCampanha = Math.round(diasDecorridos / diasTotais * 1000) / 10;
+
+  const valorRestante = Math.max(0, meta - vendido);
+  const ritmoDiario = diasDecorridos > 0 ? vendido / diasDecorridos : 0;
+  const ritmoNecessario = diasRestantes > 0 ? valorRestante / diasRestantes : valorRestante;
+  const projecaoFinal = vendido + ritmoDiario * diasRestantes;
+  const probabilidade = meta > 0 ? Math.min(999, Math.round(projecaoFinal / meta * 1000) / 10) : 0;
+
+  const encerrada = hoje > fim;
+  const semaforoRitmo = ritmoNecessario <= 0 ? 'ok' : ritmoDiario >= ritmoNecessario ? 'ok' : ritmoDiario >= ritmoNecessario * 0.7 ? 'mid' : 'low';
+  const corSemaforo = { ok: 'var(--success)', mid: '#d9a441', low: 'var(--danger)' }[semaforoRitmo];
+
+  return `
+    <div class="cockpit-card">
+      <div class="cockpit-head">
+        <div>
+          <span class="cockpit-title">🚀 Cockpit da Campanha</span>
+          <span class="cockpit-sub">${esc(colecaoAtiva())} · ${new Date(POLITICA.periodo.inicio).toLocaleDateString('pt-BR')} a ${new Date(POLITICA.periodo.fim).toLocaleDateString('pt-BR')}</span>
+        </div>
+        <span class="cockpit-status" style="background:${encerrada ? '#eee' : 'rgba(82,168,110,.15)'};color:${encerrada ? '#888' : 'var(--success)'}">${encerrada ? 'Campanha encerrada' : 'Campanha em andamento'}</span>
+      </div>
+      <div class="cockpit-grid">
+        <div class="cockpit-item"><span class="l">Dias decorridos</span><span class="v">${diasDecorridos}/${diasTotais}</span></div>
+        <div class="cockpit-item"><span class="l">Dias restantes</span><span class="v">${diasRestantes}</span></div>
+        <div class="cockpit-item"><span class="l">Dias úteis restantes</span><span class="v">${diasUteisRestantes}</span></div>
+        <div class="cockpit-item"><span class="l">% da campanha concluído</span><span class="v">${pctCampanha}%</span></div>
+        <div class="cockpit-item"><span class="l">Meta</span><span class="v gold">${fmt(meta)}</span></div>
+        <div class="cockpit-item"><span class="l">Vendido</span><span class="v">${fmt(vendido)}</span></div>
+        <div class="cockpit-item"><span class="l">Falta vender</span><span class="v" style="color:#a06f14">${fmt(valorRestante)}</span></div>
+        <div class="cockpit-item"><span class="l">Ritmo diário atual</span><span class="v">${fmt(ritmoDiario)}</span></div>
+        <div class="cockpit-item"><span class="l">Ritmo necessário/dia</span><span class="v" style="color:${corSemaforo}">${fmt(ritmoNecessario)}</span></div>
+        <div class="cockpit-item"><span class="l">Projeção de fechamento</span><span class="v">${fmt(projecaoFinal)}</span></div>
+        <div class="cockpit-item"><span class="l">Probabilidade de bater a meta</span><span class="v" style="color:${corSemaforo}">${probabilidade}%</span></div>
+      </div>
+    </div>`;
+}
+
+// ── MINHA COMISSÃO & PREMIAÇÕES (representante · OTM) ─────
+// Regras literais da política comercial oficial do On The Move:
+// faixas de comissão, clusters A/B/C e abertura de novos clientes
+// (R$ 250/cliente sem histórico de Bolsas/Roupas, pago na retenção).
+function renderComissaoPremiacoes(rep, todos) {
+  const metaTotal = todos.reduce((s, c) => s + c.progresso.valorMeta, 0) || (rep.meta_verao27 || 0);
+  const vendidoTotal = todos.reduce((s, c) => s + c.progresso.vendido, 0);
+  const pctMeta = metaTotal > 0 ? vendidoTotal / metaTotal : 0;
+  const cluster = clusterDoRepresentante(rep);
+  const com = comissaoPorPct(pctMeta);
+  const novosClientes = todos.filter(c => c.tipo_meta === 'ABERTURA').length;
+  const barPct = Math.min(100, Math.round(pctMeta * 100));
+
+  return `
+    <div class="metas-panel">
+      <h4>Minha Comissão & Premiações</h4>
+      <div class="comissao-row">
+        <div><span class="dados-label">Cluster</span><span class="dados-value" style="font-size:1.3rem">${cluster.id}</span></div>
+        <div><span class="dados-label">% da meta atingido</span><span class="dados-value">${Math.round(pctMeta * 1000) / 10}%</span></div>
+        <div><span class="dados-label">Comissão atual</span><span class="dados-value" style="color:var(--gold,#C9A84C)">${com.atual}%</span></div>
+      </div>
+      <div class="comissao-bar-wrap">
+        <div class="comissao-bar">
+          <div class="comissao-bar-fill" style="width:${barPct}%"></div>
+          ${[0.90, 1.00, 1.20].map(m => `<div class="comissao-mark" style="left:${Math.min(100, m * 100 / 1.4)}%" title="${Math.round(m*100)}%"></div>`).join('')}
+        </div>
+        <div class="comissao-bar-labels"><span>0%</span><span>90%</span><span>100%</span><span>120%+</span></div>
+      </div>
+      ${com.proxima ? `<p class="comissao-hint">Faltam <strong>${fmt(Math.max(0, metaTotal * com.tetoFaixaAtual - vendidoTotal))}</strong> pra sua comissão subir de <strong>${com.atual}%</strong> para <strong>${com.proxima}%</strong>.</p>` : `<p class="comissao-hint">Você já está na maior faixa de comissão (9,0%). 🎉</p>`}
+
+      <div class="comissao-divider"></div>
+      <div class="super-meta-box">
+        <span class="dados-label">Abertura de novos clientes</span>
+        <span class="dados-value">${novosClientes ? `${novosClientes} cliente${novosClientes === 1 ? '' : 's'} novo${novosClientes === 1 ? '' : 's'} na carteira · potencial ${fmt(novosClientes * POLITICA.aberturaNovoCliente.valor)}` : `${fmt(POLITICA.aberturaNovoCliente.valor)} por cliente novo (sem histórico de Bolsas/Roupas), pago na retenção`}</span>
+      </div>
+      ${renderSimuladorComissao(metaTotal, vendidoTotal)}
+    </div>`;
+}
+
+// ── MISSÕES DO DIA (representante) ────────────────────────
+function renderMissoesDoDia(repId) {
+  const missoes = missoesDoDia(repId);
+  return `
+    <div class="metas-panel" style="margin-bottom:22px">
+      <h4>✅ Missões do Dia</h4>
+      <div class="missoes-list">
+        ${missoes.map(m => `
+          <div class="missao-item ${m.done ? 'done' : ''}">
+            <span class="missao-icone">${m.icone}</span>
+            <span class="missao-titulo">${m.titulo}</span>
+          </div>`).join('')}
+      </div>
+    </div>`;
+}
+
+// ── RADAR COMERCIAL (representante) ───────────────────────
+function renderRadarComercial(repId) {
+  const acoes = radarComercial(repId);
+  if (!acoes.length) return `
+    <div class="section-header"><h2>📡 Radar Comercial</h2></div>
+    <div class="empty-block" style="margin-bottom:26px"><div class="icon">📡</div><p>Nenhum cliente precisando de ação agora — carteira em dia.</p></div>`;
+  const nivel = { 1: 'opp-warn', 2: 'opp-info', 3: 'opp-warn', 4: 'opp-info' };
+  return `
+    <div class="section-header"><h2>📡 Radar Comercial</h2><span class="hint">Quem acionar hoje, em ordem de prioridade — carrinho, benefícios da política, risco e inatividade</span></div>
+    <div class="opp-list" style="margin-bottom:26px">
+      ${acoes.slice(0, 8).map((a, i) => `
+        <div class="opp-card ${nivel[a.prioridade]}">
+          <span class="radar-rank">${i + 1}</span>
+          <div class="opp-main">
+            <strong>${a.icone} ${esc(a.cliente.razao_social)}</strong>
+            <span class="opp-sub">${a.motivo} · <em>${a.acao}</em></span>
+          </div>
+          <button class="btn btn-sm btn-outline" onclick="copiarLinkLojista('${a.cliente.cnpj}','${esc(a.cliente.razao_social).replace(/'/g, "\\'")}')">💬 Mensagem</button>
+        </div>`).join('')}
+      ${acoes.length > 8 ? `<p class="list-note">Mostrando as 8 ações mais urgentes de ${acoes.length}.</p>` : ''}
+    </div>`;
+}
+
+// ── SIMULADOR DE COMISSÃO (representante) ─────────────────
+let simComissaoBase = null;
+function renderSimuladorComissao(metaTotal, vendidoTotal) {
+  simComissaoBase = { metaTotal, vendidoTotal };
+  return `
+    <div class="comissao-divider"></div>
+    <div class="simulador-box">
+      <span class="dados-label">🧮 Simulador: e se eu vender mais…</span>
+      <div class="simulador-row">
+        <input type="number" id="sim-comissao-valor" class="meta-input" placeholder="R$ vendas adicionais"
+          min="0" step="1000" oninput="simularComissao(this.value)">
+        <span id="sim-comissao-out" class="simulador-out">Digite um valor pra simular sua nova faixa.</span>
+      </div>
+    </div>`;
+}
+function simularComissao(v) {
+  const out = document.getElementById('sim-comissao-out');
+  if (!out || !simComissaoBase) return;
+  const extra = parseFloat(v) || 0;
+  const { metaTotal, vendidoTotal } = simComissaoBase;
+  if (!metaTotal) { out.textContent = 'Sem meta cadastrada pra simular.'; return; }
+  const pct = (vendidoTotal + extra) / metaTotal;
+  const com = comissaoPorPct(pct);
+  out.innerHTML = `Com +${fmt(extra)} você fica em <strong>${Math.round(pct * 1000) / 10}%</strong> da meta → comissão de <strong style="color:var(--gold,#C9A84C)">${com.atual}%</strong>${com.proxima ? ` (próxima faixa: ${com.proxima}%)` : ' — faixa máxima! 🎉'}`;
+}
+
+// ── Cockpit da campanha, visão geral (master) ─────────────
+function renderCockpitCampanhaGeral() {
+  const carteiras = carteiraPorRepresentante();
+  const metaTotal = carteiras.reduce((s, r) => s + r.progresso.valorMeta, 0);
+  const vendidoTotal = carteiras.reduce((s, r) => s + r.progresso.vendido, 0);
+  return renderCockpitCampanha(metaTotal, vendidoTotal);
+}
+
+// ── Ranking de representantes: cluster, comissão, % meta, premiações ──
+function renderRankingRepresentantes() {
+  const carteiras = carteiraPorRepresentante();
+  if (!carteiras.length) return '';
+  const linhas = carteiras.map(({ rep, progresso }) => {
+    const cluster = clusterDoRepresentante(rep);
+    const com = comissaoPorPct(progresso.pct / 100);
+    const premFaixa = premiacaoGestorClusterPorPct(cluster.id, progresso.pct / 100);
+    return { rep, progresso, cluster, com, premFaixa };
+  });
+  const totalPremiacoes = linhas.reduce((s, l) => s + l.premFaixa, 0);
+  return `
+    <div class="section-header"><h2>🏆 Ranking de Representantes · Comissão &amp; Premiações</h2><span class="hint">${linhas.length} representantes ativos · premiação equipe na faixa atual: ${fmt(totalPremiacoes)}</span></div>
+    <div class="table-wrap" style="margin-bottom:26px">
+      <table>
+        <thead><tr><th>#</th><th>Representante</th><th>Cluster</th><th>Score</th><th>Meta (R$)</th><th class="meta-cell">% Atingido</th><th>Comissão</th><th>Prêmio equipe (faixa)</th></tr></thead>
+        <tbody>
+          ${linhas.map((l, i) => `
+            <tr>
+              <td>${i + 1}</td>
+              <td>${esc(l.rep.nome || '—')}</td>
+              <td><span class="status-badge">${l.cluster.id}</span></td>
+              <td><strong>${scoreCarteira(l.rep.id)}</strong><span class="muted" style="font-size:.7rem">/100</span></td>
+              <td>${fmt(l.progresso.valorMeta)}</td>
+              <td class="meta-cell">${l.progresso.pct}%</td>
+              <td style="color:var(--gold,#C9A84C);font-weight:700">${l.com.atual}%</td>
+              <td>${l.premFaixa ? `<span class="status-badge badge-success">${fmt(l.premFaixa)}</span>` : '—'}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+// ── Alertas Inteligentes / Assistente Comercial (master) ──
+function renderAlertasInteligentes() {
+  const carteiras = carteiraPorRepresentante();
+  const alertas = [];
+  carteiras.forEach(({ rep, progresso, lojistas }) => {
+    if (progresso.temMeta && progresso.pct < 50) {
+      alertas.push({ tipo: 'risco', texto: `${esc(rep.nome || 'Representante')} está em ${progresso.pct}% da meta com ${lojistas} lojista${lojistas === 1 ? '' : 's'} — ritmo abaixo do esperado para o período.` });
+    }
+  });
+  if (!alertas.length) return '';
+  return `
+    <div class="section-header"><h2>🤖 Alertas Inteligentes</h2><span class="hint">Leitura automática da carteira com base nas regras da política comercial</span></div>
+    <div class="opp-list" style="margin-bottom:26px">
+      ${alertas.map(a => `
+        <div class="opp-card ${a.tipo === 'risco' ? 'opp-warn' : 'opp-info'}">
+          <div class="opp-main"><span class="opp-sub">${a.texto}</span></div>
+        </div>`).join('')}
+    </div>`;
+}
+
 let carteiraPeriodo = 'semana';
 function trocarPeriodoCarteira(p) {
   carteiraPeriodo = p;
@@ -1153,7 +1455,8 @@ function renderCarteiraTendenciaChart() {
 
 function renderCarteira() {
   const todos = clientesComProgresso(session.id).sort((a, b) => a.razao_social.localeCompare(b.razao_social));
-  const metaTotal = todos.reduce((s, c) => s + c.progresso.valorMeta, 0);
+  // Sem metas por lojista, usa a meta oficial do rep (planilha da coleção)
+  const metaTotal = todos.reduce((s, c) => s + c.progresso.valorMeta, 0) || ((repById(session.id) || {}).meta_verao27 || 0);
   const vendidoTotal = todos.reduce((s, c) => s + c.progresso.vendido, 0);
   const pct = metaTotal > 0 ? Math.round(vendidoTotal / metaTotal * 1000) / 10 : 0;
   const pedidos = pedidosDaCarteira();
@@ -1204,7 +1507,13 @@ function renderCarteira() {
       <div class="kpi"><div class="label">✓ % atingido</div><div class="value gold">${pct}%</div></div>
       <div class="kpi"><div class="label">🛒 Em carrinho</div><div class="value" style="color:#b9760a">${fmt(valorEmCarrinho)}</div><div class="sub">${carrinhosAtivos.length} lojista${carrinhosAtivos.length === 1 ? '' : 's'}</div></div>
       <div class="kpi"><div class="label">🟢 Ativos (7 dias)</div><div class="value" style="color:var(--success)">${ativos7d}/${todos.length}</div></div>
+      <div class="kpi"><div class="label">🧭 Score da carteira</div><div class="value gold">${scoreCarteira(session.id)}</div><div class="sub">0–100 · meta, acesso, carrinho e compra</div></div>
     </div>
+
+    ${renderCockpitCampanha(metaTotal, vendidoTotal)}
+    ${renderMissoesDoDia(session.id)}
+    ${renderRadarComercial(session.id)}
+    ${renderComissaoPremiacoes(repById(session.id) || {}, todos)}
 
     <div class="metas-panels" style="grid-template-columns:minmax(220px,1fr) minmax(280px,2fr)">
       <div class="metas-panel">
@@ -1381,7 +1690,77 @@ function renderMinhaMeta() {
       ` : `<p style="color:#999;margin-top:18px">Sua meta ainda não foi definida pelo representante.</p>`}
       <a href="index.html?loja=${onlyDigits(c.cnpj)}" class="btn btn-gold btn-full" style="margin-top:20px" target="_blank">👜 Fazer pedido no catálogo</a>
     </div>
+    ${renderAssistenteDeCompra(c)}
     <p style="font-size:.78rem;color:#999;text-align:center">O progresso considera seus pedidos (não cancelados) feitos pelo catálogo com este CNPJ.</p>`;
+}
+
+// ── ASSISTENTE DE COMPRA (lojista · OTM) ──────────────────
+// Diagnóstico do pedido frente à política comercial oficial +
+// simulador de valor. Nada aqui é chute: mínimos, percentuais e
+// janelas vêm da POLITICA (documento oficial da coleção).
+let simPedidoBase = null;
+function renderAssistenteDeCompra(c) {
+  const a = assistenteDeCompra(c);
+  simPedidoBase = { minimo: a.minimo, cashback: a.cashback, acao28: a.acao28 };
+  const temCarrinho = a.valorCarrinho > 0;
+  return `
+    <div class="metas-panel" style="margin:26px 0">
+      <h4>🤝 Assistente de Compra</h4>
+      <div class="assistente-list">
+        <div class="assistente-item ${temCarrinho && a.faltaMinimo === 0 ? 'ok' : ''}">
+          <span class="assistente-icone">${temCarrinho && a.faltaMinimo === 0 ? '✅' : '🛍️'}</span>
+          <div>
+            <strong>Pedido mínimo: ${fmt(a.minimo)}</strong>
+            <span>${!temCarrinho ? 'Seu carrinho está vazio — comece pelo catálogo.'
+              : a.faltaMinimo === 0 ? `Carrinho de ${fmt(a.valorCarrinho)} já cumpre o mínimo.`
+              : `Carrinho de ${fmt(a.valorCarrinho)} — faltam ${fmt(a.faltaMinimo)} pro mínimo.`}</span>
+          </div>
+        </div>
+        ${a.cashback.ativo ? `
+        <div class="assistente-item ${temCarrinho && a.cashback.falta === 0 ? 'ok' : ''}">
+          <span class="assistente-icone">💵</span>
+          <div>
+            <strong>Cashback de ${Math.round(a.cashback.pct * 100)}%</strong>
+            <span>${a.cashback.falta === 0 ? 'Seu carrinho já libera o cashback!' : `Pedidos a partir de ${fmt(a.cashback.minimo)} — faltam ${fmt(a.cashback.falta)}.`}</span>
+          </div>
+        </div>` : ''}
+        ${a.acao28.ativo ? `
+        <div class="assistente-item ${temCarrinho && a.acao28.falta === 0 ? 'ok' : ''}">
+          <span class="assistente-icone">📅</span>
+          <div>
+            <strong>Prazo estendido (28/56/84/112)</strong>
+            <span>${a.acao28.falta === 0 ? 'Seu carrinho já garante o prazo estendido!' : `Pedidos a partir de ${fmt(a.acao28.minimo)} — faltam ${fmt(a.acao28.falta)}.`}</span>
+          </div>
+        </div>` : ''}
+        <div class="assistente-item ${a.mix.cobertas >= a.mix.total ? 'ok' : ''}">
+          <span class="assistente-icone">🧺</span>
+          <div>
+            <strong>Mix da coleção: ${a.mix.cobertas}/${a.mix.total} linhas</strong>
+            <span>${a.mix.faltantes.length ? `Ainda sem: ${a.mix.faltantes.slice(0, 4).map(esc).join(', ')}${a.mix.faltantes.length > 4 ? '…' : ''}. Variedade de linhas ajuda o giro da loja.` : 'Você já cobriu todas as linhas da coleção. 👏'}</span>
+          </div>
+        </div>
+      </div>
+      <div class="comissao-divider"></div>
+      <div class="simulador-box">
+        <span class="dados-label">🧮 Simulador de pedido</span>
+        <div class="simulador-row">
+          <input type="number" id="sim-pedido-valor" class="meta-input" placeholder="Valor do pedido (R$)"
+            min="0" step="500" oninput="simularPedidoLojista(this.value)">
+          <span id="sim-pedido-out" class="simulador-out">Digite um valor pra ver o que ele desbloqueia.</span>
+        </div>
+      </div>
+    </div>`;
+}
+function simularPedidoLojista(v) {
+  const out = document.getElementById('sim-pedido-out');
+  if (!out || !simPedidoBase) return;
+  const val = parseFloat(v) || 0;
+  const b = simPedidoBase;
+  const partes = [];
+  partes.push(val >= b.minimo ? '✅ pedido mínimo' : `❌ pedido mínimo (faltam ${fmt(b.minimo - val)})`);
+  if (b.cashback.ativo) partes.push(val >= b.cashback.minimo ? `✅ cashback de ${Math.round(b.cashback.pct * 100)}% (${fmt(val * b.cashback.pct)})` : `❌ cashback (a partir de ${fmt(b.cashback.minimo)})`);
+  if (b.acao28.ativo) partes.push(val >= b.acao28.minimo ? '✅ prazo estendido' : `❌ prazo estendido (a partir de ${fmt(b.acao28.minimo)})`);
+  out.innerHTML = `Com <strong>${fmt(val)}</strong>: ${partes.join(' · ')}`;
 }
 
 // ── LOJISTA: Meus Dados & Histórico de Pedidos ────────────

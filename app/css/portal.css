@@ -345,3 +345,100 @@ tr:hover td { background: #FBF8F1; }
   padding: 7px 10px; border: 1px solid #E3D9C6; border-radius: 8px; font-size: .78rem;
   background: var(--white); color: var(--mid, #888); outline: none;
 }
+
+/* ── Cockpit da Campanha / Comissão & Premiações (Política Comercial) ── */
+.cockpit-card {
+  background: var(--dark, #2A1F14); border-radius: 14px; padding: 20px 22px; margin-bottom: 22px;
+  color: var(--white, #fff);
+}
+.cockpit-head { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+.cockpit-title { font-size: 1.02rem; font-weight: 800; color: var(--gold, #C9A84C); display: block; }
+.cockpit-sub { font-size: .74rem; color: rgba(255,255,255,.55); display: block; margin-top: 2px; }
+.cockpit-status { font-size: .7rem; font-weight: 700; padding: 5px 12px; border-radius: 20px; white-space: nowrap; }
+.cockpit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; }
+.cockpit-item { display: flex; flex-direction: column; gap: 4px; }
+.cockpit-item .l { font-size: .66rem; text-transform: uppercase; letter-spacing: .1em; color: rgba(255,255,255,.5); }
+.cockpit-item .v { font-size: 1.02rem; font-weight: 800; color: #fff; }
+.cockpit-item .v.gold { color: var(--gold, #C9A84C); }
+
+.comissao-row { display: flex; flex-wrap: wrap; gap: 22px; margin-bottom: 12px; }
+.comissao-row > div { display: flex; flex-direction: column; gap: 3px; }
+.comissao-bar-wrap { margin: 10px 0 6px; }
+.comissao-bar { position: relative; height: 10px; border-radius: 20px; background: #EFE8D8; overflow: visible; }
+.comissao-bar-fill { height: 100%; border-radius: 20px; background: var(--gold, #C9A84C); transition: width .4s ease; }
+.comissao-mark { position: absolute; top: -3px; width: 2px; height: 16px; background: var(--dark, #2A1F14); opacity: .3; }
+.comissao-bar-labels { display: flex; justify-content: space-between; font-size: .66rem; color: var(--mid, #888); margin-top: 4px; }
+.comissao-hint { font-size: .8rem; color: var(--mid, #555); margin: 6px 0; }
+.comissao-divider { height: 1px; background: #EEE4D0; margin: 14px 0; }
+.super-meta-box {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  padding: 12px 14px; border-radius: 10px; background: #FBF7EE; border: 1px dashed #E3D9C6;
+}
+.super-meta-box.ok { background: rgba(82,168,110,.1); border: 1px solid var(--success); }
+
+/* ── Centro de Comando: Funil, Heat Map, Clusters, Segmentos ── */
+.funil-wrap { display: flex; flex-direction: column; gap: 12px; margin-bottom: 26px; }
+.funil-step { display: flex; flex-direction: column; gap: 4px; }
+.funil-label { display: flex; justify-content: space-between; font-size: .84rem; color: var(--dark); }
+.funil-label strong { color: var(--gold, #C9A84C); font-size: .95rem; }
+.funil-bar-track { height: 14px; border-radius: 20px; background: #EFE8D8; overflow: hidden; }
+.funil-bar-fill { height: 100%; border-radius: 20px; background: linear-gradient(90deg, #C9A84C, #E8D5A3); transition: width .4s ease; }
+.funil-pct { font-size: .7rem; color: var(--mid, #888); }
+
+.heatmap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+.heatmap-cell { border: 1px solid #E3D9C6; border-top-width: 3px; border-radius: 10px; padding: 10px 12px; background: var(--white); }
+.heatmap-uf { font-size: .72rem; font-weight: 800; letter-spacing: .06em; color: var(--dark); text-transform: uppercase; }
+.heatmap-pct { font-size: 1.1rem; font-weight: 800; margin: 2px 0; }
+.heatmap-sub { font-size: .68rem; color: var(--mid, #888); }
+
+.cluster-list { display: flex; flex-direction: column; gap: 12px; }
+.cluster-row { display: flex; align-items: center; gap: 12px; }
+.cluster-badge {
+  width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  color: var(--dark); font-weight: 800; font-size: .84rem; flex-shrink: 0;
+}
+.cluster-info { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.cluster-count { font-size: .76rem; color: var(--mid, #888); }
+.cluster-pct { font-size: .84rem; font-weight: 700; color: var(--dark); width: 42px; text-align: right; }
+
+.segmentos-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 26px; }
+.segmento-card { background: var(--white); border: 1px solid #E3D9C6; border-top-width: 3px; border-radius: 12px; padding: 14px 16px; }
+.segmento-head { display: flex; justify-content: space-between; align-items: center; font-size: .84rem; font-weight: 700; color: var(--dark); }
+.segmento-head strong { font-size: 1.2rem; }
+.segmento-desc { font-size: .72rem; color: var(--mid, #888); margin: 4px 0 10px; }
+.segmento-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 5px; }
+.segmento-list li { font-size: .78rem; color: var(--dark); padding-bottom: 5px; border-bottom: 1px solid #F3EEE1; }
+.segmento-list li:last-child { border-bottom: none; }
+
+/* ── Missões do Dia / Radar Comercial / Simuladores / Assistente ── */
+.missoes-list { display: flex; flex-direction: column; gap: 8px; }
+.missao-item {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  border-radius: 10px; background: #FBF7EE; border: 1px solid #EEE4D0; font-size: .84rem;
+}
+.missao-item.done { background: rgba(82,168,110,.08); border-color: rgba(82,168,110,.3); }
+.missao-icone { font-size: 1rem; }
+.missao-titulo { color: var(--dark); font-weight: 600; }
+
+.radar-rank {
+  width: 26px; height: 26px; border-radius: 50%; background: var(--dark, #2A1F14);
+  color: var(--gold, #C9A84C); font-weight: 800; font-size: .76rem;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-right: 4px;
+}
+.opp-sub em { font-style: normal; color: var(--gold, #a5843a); font-weight: 600; }
+
+.simulador-box { display: flex; flex-direction: column; gap: 8px; }
+.simulador-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.simulador-row .meta-input { max-width: 190px; }
+.simulador-out { font-size: .8rem; color: var(--mid, #555); flex: 1; min-width: 200px; }
+
+.assistente-list { display: flex; flex-direction: column; gap: 10px; }
+.assistente-item {
+  display: flex; align-items: flex-start; gap: 10px; padding: 11px 13px;
+  border-radius: 10px; border: 1px solid #EEE4D0; background: #FBF7EE;
+}
+.assistente-item.ok { background: rgba(82,168,110,.08); border-color: rgba(82,168,110,.3); }
+.assistente-icone { font-size: 1.05rem; line-height: 1.3; }
+.assistente-item div { display: flex; flex-direction: column; gap: 2px; }
+.assistente-item strong { font-size: .84rem; color: var(--dark); }
+.assistente-item span { font-size: .76rem; color: var(--mid, #777); }
