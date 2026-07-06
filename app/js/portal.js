@@ -105,7 +105,13 @@ async function doLogin(e) {
   return false;
 }
 
-function sair() { portalLogout(); clearToken(); location.reload(); }
+function sair() {
+  portalLogout(); clearToken();
+  // Remove o ?loja=CNPJ do link individual antes de recarregar — senão o
+  // boot() detecta o parâmetro de novo e faz login automático na hora,
+  // sem dar chance de escolher outro perfil (rep/master) na tela de login.
+  location.href = location.pathname;
+}
 
 // ── Shell ─────────────────────────────────────────────────
 const TABS = {
