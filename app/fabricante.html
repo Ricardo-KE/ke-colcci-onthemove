@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portal do Fabricante · Colcci On The Move – KE</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/portal.css">
+</head>
+<body>
+
+<script>window.FORCED_ROLE = 'master';</script>
+
+<!-- ── LOGIN ─────────────────────────────────────────────── -->
+<div id="login" class="portal-login">
+  <div class="portal-login-card">
+    <div class="logo">KE</div>
+    <div class="sub">Portal do Fabricante · On The Move</div>
+
+    <form id="login-form" onsubmit="doLogin(event);return false;">
+      <div class="role-fields" data-role="master">
+        <div class="form-group">
+          <label>E-mail</label>
+          <input type="email" id="m-email" placeholder="contato@ke.com.br" autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label>Senha</label>
+          <input type="password" id="m-senha" placeholder="Digite a senha" autocomplete="current-password">
+        </div>
+      </div>
+
+      <div class="login-error" id="login-error"></div>
+      <button type="submit" class="btn btn-gold btn-full">Entrar →</button>
+    </form>
+
+    <div class="login-hint" id="login-hint"></div>
+  </div>
+</div>
+
+<!-- ── SHELL ─────────────────────────────────────────────── -->
+<div id="shell" class="portal-shell">
+  <nav class="portal-nav">
+    <div>
+      <span class="logo">KE</span>
+      <span class="ctx" id="nav-ctx">Portal do Fabricante</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <span class="who" id="nav-who"></span>
+      <button class="btn btn-outline btn-sm" onclick="recarregar()" title="Buscar dados atualizados do servidor">🔄 Atualizar</button>
+      <a href="index.html" class="btn btn-outline btn-sm" target="_blank">👜 Catálogo</a>
+      <button class="btn btn-ghost btn-sm" onclick="sair()">Sair</button>
+    </div>
+  </nav>
+
+  <div class="tabs-bar" id="tabs-bar"></div>
+  <div class="portal-content" id="portal-content"></div>
+</div>
+
+<!-- ── GENERIC MODAL ──────────────────────────────────────── -->
+<div class="modal-backdrop" id="modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modal-title">—</h2>
+      <button class="drawer-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer" id="modal-footer"></div>
+  </div>
+</div>
+
+<!-- ── TOAST ──────────────────────────────────────────────── -->
+<div class="toast-container" id="toast-container"></div>
+
+<script src="js/vendor/jspdf.umd.min.js"></script>
+<script src="js/api.js"></script>
+<script src="js/seed-products.js"></script>
+<script src="js/data.js"></script>
+<script src="js/portal-data.js"></script>
+<script src="js/portal.js"></script>
+</body>
+</html>

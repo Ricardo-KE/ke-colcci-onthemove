@@ -11,7 +11,12 @@ async function boot() {
   getProducts();
   await probeOnline();
 
-  selectRole('master');
+  // Páginas dedicadas (representante.html/fabricante.html) travam o
+  // perfil via window.FORCED_ROLE — sem abas, sem risco de logar no
+  // perfil errado. portal.html (sem FORCED_ROLE) mantém o comportamento
+  // original com abas, preservando os links já enviados aos lojistas.
+  const forcedRole = window.FORCED_ROLE || null;
+  selectRole(forcedRole || 'master');
 
   const s = portalSession();
   if (s && ONLINE && getToken()) {
@@ -27,8 +32,9 @@ async function boot() {
 
   // Link individual do lojista (portal.html?loja=CNPJ): pré-preenche
   // CNPJ + senha (senha = 5 primeiros dígitos do próprio CNPJ) e entra sozinho.
+  // Só se aplica em páginas sem perfil travado, ou já travadas em lojista.
   const cnpjLink = new URLSearchParams(location.search).get('loja');
-  if (cnpjLink) {
+  if (cnpjLink && (!forcedRole || forcedRole === 'lojista')) {
     const cnpjDigits = onlyDigits(cnpjLink);
     selectRole('lojista');
     document.getElementById('l-cnpj').value = fmtCnpj(cnpjDigits);
