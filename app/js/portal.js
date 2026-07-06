@@ -967,7 +967,8 @@ function renderCarteira() {
                 ${o.status === 'pending' ? `
                   <button class="btn btn-sm btn-gold" onclick="confirmarPedido('${o.id}','confirmed')">✅ Confirmar</button>
                   <button class="btn btn-sm btn-outline" onclick="confirmarPedido('${o.id}','cancelled')">❌ Recusar</button>
-                ` : '<span class="muted">—</span>'}
+                ` : ''}
+                <button class="btn btn-sm btn-outline" onclick="baixarPdfPedido('${o.id}', this)">📄 PDF</button>
               </td>
             </tr>`).join('')}
         </tbody>
@@ -1061,6 +1062,30 @@ function statusBadgeLojista(s) {
   };
   return map[s] || { label: s, cls: 'badge-muted' };
 }
+// Estoque atual do produto (não o do momento da compra) — ajuda o lojista
+// a saber se dá pra repetir o item num próximo pedido.
+function estoqueAtualBadge(productId) {
+  if (typeof getProducts !== 'function') return '';
+  const p = getProducts().find(x => x.id === productId);
+  if (!p) return '<span class="order-item-stock muted">Produto descontinuado</span>';
+  const s = p.stock || 0;
+  const cls = s === 0 ? 'out' : s <= 5 ? 'low' : 'ok';
+  const label = s === 0 ? 'Esgotado agora' : s <= 5 ? `Últimas ${s} em estoque` : `${s} em estoque`;
+  return `<span class="order-item-stock ${cls}">${label}</span>`;
+}
+// PDF do pedido a partir do histórico — disponível pro lojista, pro
+// representante (na carteira) e pro master, reaproveitando gerarPdfPedido
+// (data.js) com a imagem gravada em cada item no momento da compra.
+async function baixarPdfPedido(orderId, btn) {
+  const order = getOrders().find(o => o.id === orderId);
+  if (!order) { toast('Pedido não encontrado.', 'error'); return; }
+  const rep = repById(order.representante_id);
+  const original = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Gerando...'; }
+  try { await gerarPdfPedido(order, rep); }
+  catch (e) { toast('Falha ao gerar o PDF.', 'error'); }
+  finally { if (btn) { btn.disabled = false; btn.innerHTML = original; } }
+}
 function renderPedidosLojista() {
   const c = clientById(session.id);
   if (!c) return `<div class="empty-block"><div class="icon">⚠️</div><p>Cadastro não encontrado.</p></div>`;
@@ -1092,6 +1117,7 @@ function renderPedidosLojista() {
             <div class="order-head-right">
               <span class="status-badge ${st.cls}">${st.label}</span>
               <span class="order-total">${fmt(o.totalValue)}</span>
+              <button class="btn btn-sm btn-outline" onclick="baixarPdfPedido('${o.id}', this)">📄 PDF</button>
             </div>
           </div>
           <div class="order-items">
@@ -1100,7 +1126,9 @@ function renderPedidosLojista() {
                 <div class="order-item-img">${i.image ? `<img src="${i.image}" alt="${esc(i.productName)}" onerror="this.parentElement.innerHTML='🛍️'">` : '🛍️'}</div>
                 <div class="order-item-info">
                   <span class="order-item-name">${esc(i.productName)}</span>
+                  <span class="order-item-code">Ref. ${esc(i.productCode || '—')}</span>
                   <span class="order-item-meta">${i.color ? esc(i.color) + ' · ' : ''}Qtd. ${i.qty}</span>
+                  ${estoqueAtualBadge(i.productId)}
                 </div>
               </div>`).join('')}
           </div>
