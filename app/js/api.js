@@ -67,13 +67,20 @@ async function authLogin(role, creds) {
   return { role: res.role, id: res.id, nome: res.nome };
 }
 
-// Carrega /api/me e popula o cache local (chaves do portal)
+// Carrega /api/me e popula o cache local (chaves do portal).
+// masters/representantes/clientes/metas vão em sessionStorage (não
+// localStorage) DE PROPÓSITO: são um cache do escopo do papel logado
+// NESTA aba. localStorage é compartilhado entre todas as abas da mesma
+// origem — se um representante ou lojista logasse numa aba enquanto o
+// master ficasse aberto em outra, o cache do master seria reduzido ao
+// escopo do rep/lojista, e a próxima gravação do master publicaria essa
+// versão "encolhida" no servidor, apagando o resto da base real.
 async function loadMe() {
   const d = await _fetch(`${API}/api/me`);
-  localStorage.setItem(LSK.masters,        JSON.stringify(d.masters || []));
-  localStorage.setItem(LSK.representantes, JSON.stringify(d.representantes || []));
-  localStorage.setItem(LSK.clientes,       JSON.stringify(d.clientes || []));
-  localStorage.setItem(LSK.metas,          JSON.stringify(d.metas || []));
+  sessionStorage.setItem(LSK.masters,        JSON.stringify(d.masters || []));
+  sessionStorage.setItem(LSK.representantes, JSON.stringify(d.representantes || []));
+  sessionStorage.setItem(LSK.clientes,       JSON.stringify(d.clientes || []));
+  sessionStorage.setItem(LSK.metas,          JSON.stringify(d.metas || []));
   localStorage.setItem(LSK.orders,         JSON.stringify(d.orders || []));
   localStorage.setItem(LSK.access,         JSON.stringify(d.access || {}));
   localStorage.setItem(LSK.carts,          JSON.stringify(d.carts || {}));
@@ -86,13 +93,13 @@ async function loadMe() {
 
 // ── Escrita (master) ──────────────────────────────────────
 function entitiesDoc() {
-  const J = (k, def) => JSON.parse(localStorage.getItem(k) || def);
+  const J = (k, def) => JSON.parse(sessionStorage.getItem(k) || def);
   return {
     masters:        J(LSK.masters, '[]'),
     representantes: J(LSK.representantes, '[]'),
     clientes:       J(LSK.clientes, '[]'),
     metas:          J(LSK.metas, '[]'),
-    settings:       J(LSK.settings, '{}'),
+    settings:       JSON.parse(localStorage.getItem(LSK.settings) || '{}'),
   };
 }
 async function pushEntities() {

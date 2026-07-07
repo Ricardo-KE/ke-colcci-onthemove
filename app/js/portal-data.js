@@ -124,8 +124,17 @@ const PORTAL_SEED_VERSION = 'portal-v1';
 // ── Helpers ───────────────────────────────────────────────
 function onlyDigits(s) { return (s || '').replace(/\D/g, ''); }
 
-function readArr(key)  { return JSON.parse(localStorage.getItem(key) || '[]'); }
-function writeArr(key, list) { localStorage.setItem(key, JSON.stringify(list)); }
+// IMPORTANTE: sessionStorage (não localStorage) de propósito — masters/
+// representantes/clientes/metas são um CACHE do escopo do papel logado
+// NA ABA atual (loadMe() os repopula a cada boot). localStorage é
+// compartilhado entre todas as abas da mesma origem: se um representante
+// ou lojista logasse numa aba enquanto o master ficasse aberto em outra,
+// o cache do master seria silenciosamente reduzido ao escopo do rep/lojista
+// e a próxima gravação do master (ex.: editar 1 representante) publicaria
+// esse cache "encolhido" pro servidor, apagando o resto da base real.
+// sessionStorage é isolado por aba, então isso não pode mais acontecer.
+function readArr(key)  { return JSON.parse(sessionStorage.getItem(key) || '[]'); }
+function writeArr(key, list) { sessionStorage.setItem(key, JSON.stringify(list)); }
 
 // dispara sincronização das entidades (se api.js estiver presente)
 function syncEntities() { if (typeof schedulePushEntities === 'function') schedulePushEntities(); }
@@ -507,11 +516,16 @@ function loginLojista(cnpj, senha) {
 }
 
 // ── Seed inicial ──────────────────────────────────────────
+// Só roda em modo OFFLINE (sem servidor) — usa writeArr diretamente
+// (NÃO addRep/addClient/setMeta) de propósito: essas funções chamam
+// syncEntities()/schedulePushEntities(), e se a conexão voltar nos
+// ~350ms seguintes, os dados de demonstração seriam publicados no
+// servidor por cima da base real. Seed local nunca deve sincronizar.
 function ensurePortalSeed() {
-  if (localStorage.getItem('ke_portal_version') === PORTAL_SEED_VERSION) return;
+  if (sessionStorage.getItem('ke_portal_version') === PORTAL_SEED_VERSION) return;
 
   if (!getMasters().length) {
-    saveMasters([{
+    writeArr(PDB.MASTERS, [{
       id: uuid(), nome: 'Ricardo (KE)', email: 'ricardo@ke.com.br',
       senha: getSettings().adminPass, criado_em: new Date().toISOString(),
     }]);
@@ -519,17 +533,21 @@ function ensurePortalSeed() {
 
   // Exemplos só na primeira carga (o usuário pode excluir)
   if (!getReps().length && !getClients().length) {
-    const rep1 = addRep({ nome: 'Ana Souza',  email: 'ana@ke.com.br',   whatsapp: '5541999990001', senha: 'rep123' });
-    const rep2 = addRep({ nome: 'Carlos Lima', email: 'carlos@ke.com.br', whatsapp: '5541999990002', senha: 'rep123' });
+    const rep1 = { id: uuid(), nome: 'Ana Souza',  email: 'ana@ke.com.br',   whatsapp: '5541999990001', senha: 'rep123', ativo: true, criado_em: new Date().toISOString() };
+    const rep2 = { id: uuid(), nome: 'Carlos Lima', email: 'carlos@ke.com.br', whatsapp: '5541999990002', senha: 'rep123', ativo: true, criado_em: new Date().toISOString() };
+    writeArr(PDB.REPS, [rep1, rep2]);
 
-    const c1 = addClient({ cnpj: '11444777000161', razao_social: 'Boutique Maré Ltda',  representante_id: rep1.id, cidade: 'Florianópolis', estado: 'SC', senha: 'loja123' });
-    const c2 = addClient({ cnpj: '19131243000197', razao_social: 'Loja Areia Fina ME',   representante_id: rep1.id, cidade: 'Balneário Camboriú', estado: 'SC', senha: 'loja123' });
-    const c3 = addClient({ cnpj: '04252011000110', razao_social: 'Estilo & Cia Comércio', representante_id: rep2.id, cidade: 'Curitiba', estado: 'PR', senha: 'loja123' });
+    const c1 = { id: uuid(), cnpj: '11444777000161', razao_social: 'Boutique Maré Ltda',  representante_id: rep1.id, cidade: 'Florianópolis', estado: 'SC', senha: 'loja123', ativo: true, criado_em: new Date().toISOString() };
+    const c2 = { id: uuid(), cnpj: '19131243000197', razao_social: 'Loja Areia Fina ME',   representante_id: rep1.id, cidade: 'Balneário Camboriú', estado: 'SC', senha: 'loja123', ativo: true, criado_em: new Date().toISOString() };
+    const c3 = { id: uuid(), cnpj: '04252011000110', razao_social: 'Estilo & Cia Comércio', representante_id: rep2.id, cidade: 'Curitiba', estado: 'PR', senha: 'loja123', ativo: true, criado_em: new Date().toISOString() };
+    writeArr(PDB.CLIENTS, [c1, c2, c3]);
 
-    setMeta(c1.id, 30000);
-    setMeta(c2.id, 18000);
-    setMeta(c3.id, 25000);
+    writeArr(PDB.METAS, [
+      { id: uuid(), cliente_id: c1.id, colecao: colecaoAtiva(), valor_meta: 30000 },
+      { id: uuid(), cliente_id: c2.id, colecao: colecaoAtiva(), valor_meta: 18000 },
+      { id: uuid(), cliente_id: c3.id, colecao: colecaoAtiva(), valor_meta: 25000 },
+    ]);
   }
 
-  localStorage.setItem('ke_portal_version', PORTAL_SEED_VERSION);
+  sessionStorage.setItem('ke_portal_version', PORTAL_SEED_VERSION);
 }

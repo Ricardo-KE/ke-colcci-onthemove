@@ -147,12 +147,33 @@ export default async (req) => {
         return j({ ok: true });
       }
       if (b == null) return j({ error: 'bad body' }, 400);
+
+      // Trava de segurança: nunca aceitar uma gravação de "entities" que
+      // reduza drasticamente a base de clientes/representantes de uma vez.
+      // Protege contra bugs de cliente que publiquem um cache parcial
+      // (ex.: escopo de um representante) por cima da base real inteira.
+      if (key === 'entities') {
+        const atual = await getDoc('entities');
+        const check = (campo, minAbsoluto) => {
+          const antes = (atual[campo] || []).length;
+          const depois = (b[campo] || []).length;
+          if (antes >= minAbsoluto && depois < antes * 0.5) {
+            throw Object.assign(new Error(
+              `Bloqueado: isso reduziria "${campo}" de ${antes} para ${depois} (mais de 50% de queda). ` +
+              `Se for intencional, refaça em duas etapas menores ou avise o suporte.`
+            ), { httpStatus: 409 });
+          }
+        };
+        check('clientes', 20);
+        check('representantes', 5);
+      }
+
       await store().setJSON(key, b);
       return j({ ok: true });
     }
     return j({ error: 'method' }, 405);
   } catch (e) {
-    return j({ error: String(e && e.message || e) }, 500);
+    return j({ error: String(e && e.message || e) }, (e && e.httpStatus) || 500);
   }
 };
 
