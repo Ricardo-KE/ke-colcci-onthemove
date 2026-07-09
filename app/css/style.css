@@ -415,4 +415,14 @@ body {
 .section-btn.active {
   border-color: var(--caramelo); background: var(--caramelo); color: #fff;
 }
+
+/* ── SITE FOOTER ───────────────────────────────────────────── */
+.site-footer {
+  margin-top: 40px; padding: 22px 24px; background: var(--dark); color: var(--mid);
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  flex-wrap: wrap; text-align: center; font-size: .78rem;
+}
+.site-footer a { color: var(--gold-lt); text-decoration: none; }
+.site-footer a:hover { color: var(--gold); text-decoration: underline; }
+.site-footer .dot { opacity: .5; }
 .section-btn.active .section-sub { color: rgba(255,255,255,.85); }
